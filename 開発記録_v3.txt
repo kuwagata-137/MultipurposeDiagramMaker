@@ -1,0 +1,333 @@
+﻿================================================================================
+  ビジネスダイアグラムメーカー 開発記録（変更履歴）
+================================================================================
+
+  本ファイルはバージョンごとの変更内容を記録する。
+  運用ルールは「運用ルール.txt」、開発計画は「開発ロードマップ.txt」を参照。
+================================================================================
+  v3.xx 変更履歴（v3.00〜v3.01）
+================================================================================
+--------------------------------------------------------------------------------
+  v3.01  2026-05-27
+  戻り接続線の引き出し幅改善＋クランク位置編集機能
+--------------------------------------------------------------------------------
+
+  【指示内容】
+    1. 判断等の分岐から手前に戻る接続線の引き出し部分の幅が短すぎて
+       わかりにくい問題を修正する
+    2. 接続線のクランク（折り返し）部分の位置を編集できるようにする
+
+  【実装内容】
+
+    ■ 戻り接続線の引き出し幅改善
+
+      MIN_CRANK_LEAD定数(40px)を追加
+
+      calcMidY() / calcMidX() ヘルパー関数を新規追加
+        - clearY()/clearX()で障害物回避位置を計算した後、
+          出口辺と入口辺が同一方向（right+right, left+left等）の場合に
+          クランク位置を両ノードの外側＋MIN_CRANK_LEADに押し出す
+        - exitSide==='bottom'かつentrySide==='bottom':
+          midY = max(sy,ey) + MIN_CRANK_LEAD（両ノードの下側に迂回）
+        - exitSide==='right'かつentrySide==='right':
+          midX = max(sx,ex) + MIN_CRANK_LEAD（両ノードの右側に迂回）
+        - 他の同側ケースも同様
+
+      routePath() / routeWaypoints() の変更
+        - calcMidY/calcMidXを使用するよう変更
+        - 直線ショートカット条件にexitSide!==entrySideを追加
+          （同側出入りの場合は直線にせず必ずクランク経路を生成）
+        - midPos引数を追加（クランク位置編集用、後述）
+
+    ■ クランク位置編集機能
+
+      エッジに midPos プロパティを追加（null=自動計算）
+        - JSON直列化で自動的に保存・復元される
+        - Undo/Redoも既存の仕組みで自動対応
+
+      routePath() / routeWaypoints()
+        - midPos引数が非nullの場合、calcMidY/calcMidXの代わりに
+          その値をクランク位置として使用
+        - fixSegs()による障害物回避はmidPos使用時も動作
+
+      renderEdges() の変更
+        - 各エッジについてcrankInfo（axis:'y'|'x', val, c1, c2）を計算
+        - VVケース: axis='y'（水平クランク、上下ドラッグ）
+        - HHケース: axis='x'（垂直クランク、左右ドラッグ）
+        - 混合方向・直線エッジ: crankInfo=null（ハンドルなし）
+
+      renderOneEdge() にクランクドラッグハンドルを追加
+        - エッジ選択時のみ表示（白背景＋青枠の10x10px角丸矩形）
+        - VVクランク: ns-resizeカーソル（上下ドラッグ）
+        - HHクランク: ew-resizeカーソル（左右ドラッグ）
+        - mousedownでcrankDragStateを開始
+        - ダブルクリックでmidPosをリセット（自動位置に戻る）
+
+      crankDragState 変数を追加
+        - {edgeId, axis, startMouse, origVal} を保持
+        - mousemove: 軸方向の差分をorigValに加算してed.midPosを更新、
+          renderEdges()で即時反映
+        - mouseup: crankDragState=null, snap(), render()で確定
+
+    ■ 図種切替時の選択状態クリア
+
+      changeDiagramType() に S.sel=[]; S.conn=null; activePal=null; を追加
+        - 図種切替前の選択シェイプが残らないようにする
+
+    ■ 状態遷移図でのマルチプロセス配置バグ修正
+
+      placeShape() のcrosslane分岐を修正
+        - 原因: crosslane配置が常にaddCrosslaneNode()を呼び出していたが、
+          同関数はS.lanesの存在を前提としており、レーンなし図種
+          （状態遷移図等）ではS.lanes[-1].idでTypeErrorが発生していた
+        - 修正: !usesLanes()の場合はaddNode()を呼び出すよう分岐を追加
+          レーンあり図種では従来通りaddCrosslaneNode()を使用
+
+    ■ 複数レーンプロセスへの接続線経路バグ修正
+
+      allocatePorts() のポート使用カウンタをレーン別に分離
+        - 原因: crosslaneノードへの接続ポートがノードID単位で管理されており、
+          異なるレーンへの接続でも同一ノードとしてカウントされていた
+          例: レーン1のプロセスがcrosslaneのレーン1へtop接続後、
+          レーン2のプロセスがcrosslaneのレーン2へtop接続しようとすると
+          topが使用済み判定されright等に迂回し経路がおかしくなっていた
+        - 修正: pKey()ヘルパーを追加し、crosslaneノードの場合は
+          「ノードID:レーンID」をポート使用キーとして使用
+          異なるレーンへの接続は独立してポートを割り当てられるようになった
+        - 通常ノードのポート競合解決には影響なし（キーがノードIDのまま）
+
+  【変更ファイル】
+    swimlane_v3.01.html
+
+--------------------------------------------------------------------------------
+  v3.00  2026-05-26
+  Tier 2 Phase 3 — シーケンス図
+--------------------------------------------------------------------------------
+
+  【実装内容】
+
+    ■ 3-1. DIAGRAM_TYPES へのシーケンス図追加
+      sequence:{ name:'シーケンス図', useLanes:false, defaultLanes:0,
+                 palette:['lifeline','activation'],
+                 palLabels:{lifeline:'ライフライン', activation:'活性区間'},
+                 shapeTexts:{lifeline:'アクター'} }
+      新規作成ダイアログにシーケンス図カード（📨 アイコン）を追加
+      図種切替メニューにも 'sequence' を追加
+
+    ■ 3-2. 新規シェイプ: ライフライン (lifeline)
+      SD.lifeline = { w:100, h:40, text:'アクター', fill:'#ffffff', stroke:'#374151' }
+      配置時のY座標を20に固定（ヘッダー行整列）
+      shapeEl: 角丸矩形（rx:3）で描画
+      renderNodes: ヘッダーボックス中央にテキスト表示
+      ドラッグ時X方向のみ移動可能（Y固定制約）
+      移動時に所属する活性区間のXも自動連動
+
+    ■ 3-3. 新規シェイプ: 活性区間 (activation)
+      SD.activation = { w:16, h:60, text:'', fill:'#dbeafe', stroke:'#3b82f6' }
+      最寄りのライフライン中心にX座標スナップ、lifelineIdプロパティで紐付け
+      shapeEl: 細い角丸矩形（rx:2）で描画
+      ドラッグ時Y方向のみ移動可能（X固定制約）
+      選択時に上下リサイズハンドル表示（startActivationResize）
+      リサイズ: 上端/下端ドラッグで活性区間の高さを変更（最小20px）
+
+    ■ 3-4. ライフライン縦破線 (renderLifelines)
+      g-lifelines SVGグループ（g-gridとg-guidesの間）に描画
+      各ライフラインヘッダーボックス下端からキャンバス底部まで破線を描画
+      stroke-dasharray:'6,4', stroke:'#94a3b8'
+
+    ■ 3-5. シーケンスメッセージ矢印 (renderSequenceEdges)
+      render() でdiagramType==='sequence'時はrenderEdges()の代わりに呼出
+      ライフライン中心線間の水平矢印として描画
+      メッセージY座標(ed.msgY)でY位置を決定
+      3種類のメッセージタイプ:
+        - sync（同期）: 実線＋塗りつぶし三角マーカー
+        - reply（応答）: 破線(6,4)＋開き矢頭マーカー
+        - async（非同期）: 実線＋開き矢頭マーカー
+      自己呼出し: U字型パス（右に40px突出→下に30px→戻る）
+      ラベル表示: 矢印の上にテキスト（白背景付き）
+      ヒットエリア: クリック・ダブルクリック・右クリック対応
+
+    ■ 3-6. シーケンス専用SVGマーカー
+      arr-seq-sync / arr-seq-sync-sel: 塗りつぶし三角（同期用）
+      arr-seq-async / arr-seq-async-sel: 開き矢頭（非同期・応答用）
+
+    ■ 3-7. メッセージ種類選択ダイアログ (showMessageChoice)
+      接続モードで2つ目のノードクリック後に表示
+      「同期メッセージ →」「非同期メッセージ ⇢」「応答 ⇠ (破線)」の3択
+      選択後にaddEdgeにmsgType, msgYを渡してエッジ作成
+      メッセージY座標: 既存エッジの最大Y+40で自動配置
+
+    ■ 3-8. エッジ管理の拡張
+      addEdge: opts.msgType, opts.msgY をエッジオブジェクトに保存
+      シーケンス図では同一ペアの重複エッジを許可（複数メッセージ対応）
+      シーケンス図では自己呼出し（from===to）も許可
+      snap/restore でmsgType, msgYが自動的にJSON保存・復元
+
+    ■ 3-9. カスケード削除
+      ライフライン削除時: 所属する活性区間（lifelineIdで紐付け）も自動削除
+      接続先/接続元が削除されたエッジも自動削除（既存動作）
+
+    ■ 3-10. isFreeShape 更新
+      lifeline, activation を追加（レーン制約なし・スナップなし）
+
+    ■ 3-11. パレットアイコン
+      lifeline: ヘッダーボックス＋破線のSVGアイコン
+      activation: 細い矩形のSVGアイコン
+
+--------------------------------------------------------------------------------
+  v3.00  2026-05-26
+  Tier 2 Phase 2 — 組織図＋範囲選択機能
+--------------------------------------------------------------------------------
+
+  【実装内容】
+
+    ■ 2-1. DIAGRAM_TYPES への組織図追加
+      orgchart:{ name:'組織図', useLanes:false, defaultLanes:0,
+                 palette:['org_node','org_group'],
+                 palLabels:{org_node:'ポジション', org_group:'部門'},
+                 shapeTexts:{org_node:'役職名'}, noArrow:true }
+      新規作成ダイアログに組織図カード（🏢 アイコン）を追加
+      図種切替メニューにも組織図を追加
+
+    ■ 2-2. 新規シェイプ: ポジション (org_node)
+      SD.org_node = { w:140, h:55, text:'役職名', fill:'#dbeafe', stroke:'#3b82f6' }
+      Phase 0 の多セクション機構を利用した2段矩形:
+        - 上部セクション: 役職名（太字ヘッダー、style:'header'）
+        - 下部セクション: 氏名（通常テキスト、style:'sub' ※新規追加）
+      sub スタイルをcalcSectionsH/sectionOffsets/sectionSizeに追加
+      shapeElのrect分岐にorg_nodeを追加（セクションなし時のフォールバック）
+
+    ■ 2-3. 新規シェイプ: 部門 (org_group)
+      SD.org_group = { w:300, h:200, text:'部門名', fill:'#f0fdf4', stroke:'#86efac' }
+      背景グループ矩形: 半透明・破線枠（stroke-dasharray）・角丸
+      部門名は左上に緑色テキストで表示
+      isFreeShape()にorg_groupを追加（スナップ・レーン制約なし）
+      renderNodes()で描画順をソートし、org_groupを背面に配置
+
+    ■ 2-4. 接続線スタイルの図種別切替
+      DIAGRAM_TYPESにnoArrowプロパティを追加
+      renderOneEdge()でnoArrow時にmarker-endを省略
+      組織図では矢印なしの直線接続を実現
+
+    ■ 2-5. パレットアイコン
+      org_node: 2段分割矩形アイコン
+      org_group: 破線矩形アイコン
+
+    ■ 2-6. 範囲選択機能（全図種共通）
+      マーキー選択:
+        - svgMD()で空白ドラッグ開始を検出（marqueeオブジェクト生成）
+        - mousemoveでg-guidesに青色半透明・点線のrectを描画
+        - mouseupで矩形内（中心座標判定）のノードをS.selに追加
+      グループ移動:
+        - nodeMD()でS.sel複数選択中のノードドラッグ時、全ノードのoffsetを保持
+        - mousemoveでdrag.group内の全ノードを同時移動
+        - mouseupで選択状態を維持
+      Shift+クリック:
+        - nodeMD()でev.shiftKey検出時、S.selにトグル追加/除去
+
+  【変更ファイル】
+    swimlane_v3.00.html
+
+--------------------------------------------------------------------------------
+  v3.00  2026-05-26
+  Tier 2 Phase 1 — ER図（エンティティ・リレーションシップ図）
+--------------------------------------------------------------------------------
+
+  【バグ修正 2026-05-26】
+
+    ■ shapeEl() エンティティ描画エラー修正
+      問題: entity型ノードがsectionsなしの状態でshapeEl()に渡されると
+            該当するtype分岐がなくundefinedを返し、renderNodes()の
+            appendChild()でTypeErrorが発生。addNode()内部のrender()が
+            placeShape()でsectionsを設定する前に実行されるため、
+            ER図でエンティティ配置時に必ずクラッシュしていた。
+            一度エラーが発生すると以降の全render()が失敗し、
+            全シェイプの配置が不可能になるカスケード障害。
+      修正: shapeEl()のrect分岐条件を
+            if(n.type==='rect') → if(n.type==='rect'||n.type==='entity')
+            に変更し、sectionsなしのentityもrect同様に描画できるようにした。
+
+  【実装内容】
+
+    ■ 1-1. DIAGRAM_TYPES への ER図追加
+      er:{ name:'ER図', useLanes:false, defaultLanes:0,
+           palette:['entity','er_relation'],
+           palLabels:{entity:'エンティティ', er_relation:'リレーション'},
+           shapeTexts:{entity:'テーブル名'} }
+      新規作成ダイアログに ER図カード（🗃️ アイコン）を追加
+      図種切替メニューにも ER図を追加
+
+    ■ 1-2. 新規シェイプ: エンティティ (entity)
+      SD.entity = { w:160, h:90, text:'テーブル名', fill:'#dbeafe', stroke:'#3b82f6' }
+      Phase 0 の多セクション機構を利用した多段矩形:
+        - 上部セクション: テーブル名（太字ヘッダー、style:'header'）
+        - 下部セクション: カラムリスト（style:'list', デフォルト3行）
+      placeShape() で entity 配置時に sections を自動生成
+      ダブルクリックで各セクション個別編集（editSection 流用）
+      高さはカラム数に応じて自動拡張（Phase 0 の auto-height）
+
+    ■ 1-3. 新規シェイプ: リレーション (er_relation)
+      SD.er_relation = { w:80, h:50, text:'', fill:'#fef9c3', stroke:'#ca8a04' }
+      既存 diamond と同一のひし形描画（shapeEl で diamond 分岐を共有）
+      テキストはひし形中央に配置（renderNodes の default 分岐）
+
+    ■ 1-4. カーディナリティ記号
+      showCardinalityChoice(): 接続作成時にカーディナリティ選択メニューを表示
+        選択肢: 1:1 / 1:N / N:N / 0..1:1 / 0..N:1 / なし
+      接続ハンドラ: ER図モード時、エッジ生成直後にメニューを表示
+        選択結果を edge.fromLabel / edge.toLabel に設定
+      端点ラベル描画は Phase 0 の endpointLabelPos + renderOneEdge を流用
+
+    ■ 1-5. ER図パレットアイコン
+      entity: 二段分割矩形アイコン（ヘッダー線＋2行リスト線）
+      er_relation: ひし形アイコン
+
+--------------------------------------------------------------------------------
+  v3.00  2026-05-26
+  Tier 2 Phase 0 — コアエンジン拡張（共通基盤）
+--------------------------------------------------------------------------------
+
+  【実装内容】
+
+    ■ 0-1. 多セクションノード機構
+      ノードに sections プロパティ（配列）を追加し、可変個数の
+      セクション（ヘッダー行 / リスト行）を1つのノード内に描画する
+      汎用機構を実装。
+
+      - 定数追加: SECT_HDR_H(30), SECT_ROW_H(20), SECT_PAD(6)
+      - calcSectionsH(): セクション定義から合計高さを算出
+      - sectionOffsets(): 各セクションの描画開始座標を算出
+      - sectionSize(): 個別セクションの高さ/幅を算出
+      - shapeEl(): sections を持つノードの外枠＋区切り線描画
+      - renderNodes(): セクション内テキスト描画＋セクション別クリック領域
+      - render(): セクション内容に応じた高さ自動拡張
+      - editSection(): セクション個別のインライン編集
+      - 縦モード・横モード両対応
+      - 保存/復元は既存JSON直列化で自動対応
+
+    ■ 0-2. 接続線の端点ラベル装飾
+      エッジに fromLabel / toLabel プロパティを追加し、接続線の
+      始点側・終点側それぞれに記号やテキストを描画する機構を実装。
+
+      - addEdge(): fromLabel, toLabel を初期値空文字で保持
+      - endpointLabelPos(): 出口辺/入口辺の方向に応じたラベル配置座標算出
+      - renderOneEdge(): 端点ラベルのテキスト描画（ダブルクリックで編集可）
+      - editEdgeEndLabel(): 端点ラベルのインライン編集
+
+    ■ 0-3. 自動レイアウトエンジン（基礎）
+      ツリー構造のノード群を自動整列するレイアウト機能を実装。
+
+      - autoLayout(): ルートノード検出→BFS レベル分類→等間隔配置
+        ・入力エッジなしのノードをルートとして検出
+        ・幅優先探索でレベル（深さ）を割り当て
+        ・各レベルのノードを交差軸方向に中央揃えで配置
+        ・レベル間は主軸方向に等間隔配置
+        ・座標抽象化 isV()/toPhysical() により縦/横モード両対応
+        ・レーン使用時はレーン割り当てを自動更新
+        ・crosslane シェイプは対象外
+      - ツールバーに「⊞ 整列」ボタンを追加
+
+  【ファイル変更】
+    swimlane_v2.05.html → swimlane_v3.00.html（コピー＋編集）
+    <title> および #app-title-bar のバージョンを v3.00 に更新
+
