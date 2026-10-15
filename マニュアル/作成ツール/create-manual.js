@@ -1,6 +1,6 @@
 // 操作マニュアル（.docx）の生成。原稿は manual-content.js（ブロックの並び）、画面は capture-puppeteer.js が
 // リポジトリのルートの screenshots/manual/ に撮ったもの（寸法は _manifest.json）を使う。リポジトリのルートで:
-//   node マニュアル/作成ツール/create-manual.js            … マニュアル/ビジネスダイアグラムメーカー_操作マニュアル_vX.YZ.docx を出力（リポジトリで管理）
+//   node マニュアル/作成ツール/create-manual.js            … マニュアル/MultipurposeDiagramMaker_操作マニュアル_vX.YZ.docx を出力（リポジトリで管理）
 //   node マニュアル/作成ツール/create-manual.js --preview  … あわせて screenshots/manual/_preview.html（同じ原稿を A4 の HTML にしたもの）を出力
 //     ＝Word の無い環境でページの見た目（画像の大きさ・表の崩れ）を確かめる用。改ページの位置は Word と完全には一致しない
 // docx はローカル（npm install docx）を優先し、無ければグローバル導入ぶん・/opt/node-tools へ退避する。
@@ -199,7 +199,7 @@ const D = (() => {
         table([2000, 3000], c.meta.map(([a, b]) => metaRow(a, b)), { align: AlignmentType.CENTER }),
       ]
     };
-    const hdr = new Header({ children: [new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '2E75B6', space: 4 } }, children: [new TextRun({ text: 'ビジネスダイアグラムメーカー ' + APP_VERSION + ' 操作マニュアル', font: FONT, size: 18, color: '2E75B6' })] })] });
+    const hdr = new Header({ children: [new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '2E75B6', space: 4 } }, children: [new TextRun({ text: 'MultipurposeDiagramMaker ' + APP_VERSION + ' 操作マニュアル', font: FONT, size: 18, color: '2E75B6' })] })] });
     const ftr = new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC', space: 4 } }, children: [
       new TextRun({ text: 'Page ', font: FONT, size: 18, color: '808080' }), new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: 18, color: '808080' }),
       new TextRun({ text: ' / ', font: FONT, size: 18, color: '808080' }), new TextRun({ children: [PageNumber.TOTAL_PAGES], font: FONT, size: 18, color: '808080' }),
@@ -339,7 +339,7 @@ const doc = D.build(content.body);
 Packer.toBuffer(doc).then(buffer => {
   const outDir = path.join(__dirname, '..');   // マニュアル/（このスクリプトは マニュアル/作成ツール/ にある）
   fs.mkdirSync(outDir, { recursive: true });
-  const outPath = path.join(outDir, 'ビジネスダイアグラムメーカー_操作マニュアル_' + APP_VERSION + '.docx');
+  const outPath = path.join(outDir, 'MultipurposeDiagramMaker_操作マニュアル_' + APP_VERSION + '.docx');
   fs.writeFileSync(outPath, buffer);
   console.log('Manual created: ' + outPath);
   console.log('Size: ' + (buffer.length / 1024 / 1024).toFixed(1) + ' MB / 図 ' + D.figCount() + ' 点 / 画像 ' + usedShots.size + ' 枚');
