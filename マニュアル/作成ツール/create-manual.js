@@ -1,7 +1,7 @@
 // 操作マニュアル（.docx）の生成。原稿は manual-content.js（ブロックの並び）、画面は capture-puppeteer.js が
-// screenshots/manual/ に撮ったもの（寸法は _manifest.json）を使う。
-//   node create-manual.js            … マニュアル/ビジネスダイアグラムメーカー_操作マニュアル_vX.YZ.docx を出力（リポジトリで管理）
-//   node create-manual.js --preview  … あわせて screenshots/manual/_preview.html（同じ原稿を A4 の HTML にしたもの）を出力
+// リポジトリのルートの screenshots/manual/ に撮ったもの（寸法は _manifest.json）を使う。リポジトリのルートで:
+//   node マニュアル/作成ツール/create-manual.js            … マニュアル/ビジネスダイアグラムメーカー_操作マニュアル_vX.YZ.docx を出力（リポジトリで管理）
+//   node マニュアル/作成ツール/create-manual.js --preview  … あわせて screenshots/manual/_preview.html（同じ原稿を A4 の HTML にしたもの）を出力
 //     ＝Word の無い環境でページの見た目（画像の大きさ・表の崩れ）を確かめる用。改ページの位置は Word と完全には一致しない
 // docx はローカル（npm install docx）を優先し、無ければグローバル導入ぶん・/opt/node-tools へ退避する。
 const fs = require('fs');
@@ -10,7 +10,7 @@ function requireDocx() {
   try { return require('docx'); } catch (e) { }
   const cands = [path.join(process.env.APPDATA || '', 'npm/node_modules/docx'), '/opt/node-tools/node_modules/docx'];
   for (const c of cands) { try { return require(c); } catch (e) { } }
-  throw new Error('docx が見つかりません。このフォルダで `npm install docx` を実行してください。');
+  throw new Error('docx が見つかりません。リポジトリのルートで `npm install docx` を実行してください。');
 }
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
@@ -19,9 +19,9 @@ const {
   PageNumber, VerticalAlign, TableOfContents, TableLayoutType
 } = requireDocx();
 
-const shotDir = path.join(__dirname, 'screenshots', 'manual');
+const shotDir = path.join(__dirname, '..', '..', 'screenshots', 'manual');   // リポジトリのルートの screenshots/manual/
 const APP_VERSION = 'v8.32';
-const LAST_UPDATED = '2026年10月3日';
+const LAST_UPDATED = '2026年10月15日';
 const FONT = 'Meiryo UI';
 const manifest = JSON.parse(fs.readFileSync(path.join(shotDir, '_manifest.json'), 'utf8'));
 const content = require('./manual-content.js')({ APP_VERSION, LAST_UPDATED });
@@ -337,7 +337,7 @@ ${html}
 // ===================================================================
 const doc = D.build(content.body);
 Packer.toBuffer(doc).then(buffer => {
-  const outDir = path.join(__dirname, 'マニュアル');
+  const outDir = path.join(__dirname, '..');   // マニュアル/（このスクリプトは マニュアル/作成ツール/ にある）
   fs.mkdirSync(outDir, { recursive: true });
   const outPath = path.join(outDir, 'ビジネスダイアグラムメーカー_操作マニュアル_' + APP_VERSION + '.docx');
   fs.writeFileSync(outPath, buffer);
