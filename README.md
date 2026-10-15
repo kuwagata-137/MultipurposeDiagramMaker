@@ -1,4 +1,4 @@
-# ビジネスダイアグラムメーカー（Business Diagram Maker）
+# MultipurposeDiagramMaker
 
 ブラウザだけで動作する、**単一 HTML ファイル完結**のビジネス図作成ツールです。
 スイムレーン図メーカーを起点に、ノード配置・接続線ルーティング・保存/復元・各種エクスポートを
@@ -92,7 +92,7 @@ node serve.js      # ローカルでプレビュー
 ```bash
 node serve.js              # 別ターミナルで起動したままにする
 node capture-puppeteer.js  # screenshots/manual/ に画面を撮り直す（章を絞るときは m03 m05 のように指定）
-node create-manual.js      # マニュアル/ビジネスダイアグラムメーカー_操作マニュアル_vX.YZ.docx を出力
+node create-manual.js      # マニュアル/MultipurposeDiagramMaker_操作マニュアル_vX.YZ.docx を出力
 ```
 
 - 役割: 撮影の手順と注釈（赤枠・番号・カーソルの絵）＝`capture-puppeteer.js`、原稿＝`manual-content.js`、

@@ -23,7 +23,7 @@ module.exports = ({ APP_VERSION, LAST_UPDATED }) => {
   const I = (n, o = {}) => ({ icon: 'btn_' + n, ...o });
 
   const cover = {
-    title: '操作マニュアル', app: 'ビジネスダイアグラムメーカー ' + APP_VERSION, sub: '総合編（全5図種対応）', img: 'm00_cover',
+    title: '操作マニュアル', app: 'MultipurposeDiagramMaker ' + APP_VERSION, sub: '総合編（全5図種対応）', img: 'm00_cover',
     meta: [['作成者', 'くわがた'], ['作成日', '2026年5月25日'], ['最終更新日', LAST_UPDATED], ['バージョン', APP_VERSION]],
   };
 
@@ -32,7 +32,7 @@ module.exports = ({ APP_VERSION, LAST_UPDATED }) => {
   // =================================================================
   const ch01 = [
     H(1, '1. 概要'),
-    P('ビジネスダイアグラムメーカー ' + APP_VERSION + ' は、業務で使う図をブラウザだけで作れるアプリケーションです。1つのHTMLファイルとして動作し、サーバーやインストールは要りません。HTMLファイルをブラウザで開けば、そのまま使えます。'),
+    P('MultipurposeDiagramMaker ' + APP_VERSION + ' は、業務で使う図をブラウザだけで作れるアプリケーションです。1つのHTMLファイルとして動作し、サーバーやインストールは要りません。HTMLファイルをブラウザで開けば、そのまま使えます。'),
     P('本マニュアルでは、全図種に共通する基本操作と、図種ごとの使い方を説明します。'),
     H(2, '1.1 このマニュアルの見方'),
     P('画面の図には、操作する場所を次の記号で示しています。'),
