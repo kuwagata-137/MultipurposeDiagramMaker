@@ -4,8 +4,10 @@
 スイムレーン図メーカーを起点に、ノード配置・接続線ルーティング・保存/復元・各種エクスポートを
 備えた汎用ダイアグラムエディタへ発展させました。インストール不要で、HTML を開くだけで使えます。
 
-- **最新版**: [`diagram_v8.13.html`](diagram_v8.13.html)（2026-08-17）
-- 開発計画は [`開発ロードマップ.txt`](開発ロードマップ.txt)、変更履歴は [`開発記録.txt`](開発記録.txt) を参照してください。
+- **アプリ本体（最新版）**: [`アプリケーション本体/diagram_v8.32.html`](アプリケーション本体/diagram_v8.32.html)（2026-10-13）
+- **操作マニュアル**: [`マニュアル/ビジネスダイアグラムメーカー_操作マニュアル_v8.32.docx`](マニュアル/ビジネスダイアグラムメーカー_操作マニュアル_v8.32.docx)
+- 開発計画は [`開発資料/開発ロードマップ/開発ロードマップ.txt`](開発資料/開発ロードマップ/開発ロードマップ.txt)、
+  変更履歴は [`開発資料/開発記録/開発記録.txt`](開発資料/開発記録/開発記録.txt) を参照してください。
 
 ---
 
@@ -41,8 +43,9 @@
 
 ## 使い方
 
-最新版の [`diagram_v8.13.html`](diagram_v8.13.html) をブラウザで開くだけです。
-過去版は `99_旧バージョン/` に退避してあります（ルート直下に置くのは常に最新版1本だけ）。
+`アプリケーション本体` フォルダの [`diagram_v8.32.html`](アプリケーション本体/diagram_v8.32.html) をブラウザで開くだけです。
+このフォルダに置くのは常に最新版 1 本だけです（過去版は Git の履歴から取り出せます）。
+操作方法は `マニュアル` フォルダの操作マニュアル（Word）を参照してください。
 
 ## 開発の経緯（バージョン構成）
 
@@ -55,23 +58,27 @@
 | v6 | ガント/工程表の Excel(.xlsx) 出力（ExcelJS 同梱） |
 | v7 | 樹状図計画（組織図 → 汎用ツリー図）、グループ枠、判断シェイプ頂点接続 ほか |
 
-詳細な変更履歴はメジャーバージョンごとに分割しています（`開発記録_v1.txt` 〜 `開発記録_v7.txt`）。
+詳細な変更履歴はメジャーバージョンごとに分割しています（`開発資料/開発記録/開発記録_v1.txt` 〜 `開発記録_v8.txt`）。
 
 ## リポジトリ構成
 
 ```
-diagram_v*.html        本体（ルートは最新版1本のみ / 最新は v8.13）
-99_旧バージョン/        過去版の退避先
-開発記録*.txt          変更履歴（開発記録.txt = 索引、_v1〜_v8 = 各メジャー版）
-開発ロードマップ*.txt   開発計画（開発ロードマップ.txt = 全体計画＋索引）
-運用ルール.txt          開発・運用ルール
-capture-puppeteer.js   操作マニュアル用のスクリーンショット撮影（注釈つき。Puppeteer／Playwright）
-serve.js               ローカルプレビュー用簡易サーバー
-create-manual.js       操作マニュアル生成スクリプト（Word への描画）
-manual-content.js      操作マニュアルの原稿
-マニュアル/            操作マニュアル（.docx・create-manual.js の出力先）
-exceljs.bare.min.js    Excel 出力用の同梱ライブラリ（ExcelJS, MIT License）
-package.json           開発補助スクリプトの依存（Puppeteer / docx）
+アプリケーション本体/
+  diagram_v8.32.html     アプリ本体（最新版 1 本だけ。これをブラウザで開く）
+マニュアル/
+  ビジネスダイアグラムメーカー_操作マニュアル_v8.32.docx   操作マニュアル（Word）
+  作成ツール/
+    capture-puppeteer.js マニュアル用のスクリーンショット撮影（注釈つき。Puppeteer／Playwright）
+    manual-content.js    マニュアルの原稿
+    create-manual.js     マニュアルの生成（Word への描画）
+    serve.js             ローカルプレビュー用の簡易サーバー（リポジトリのルートを配る）
+開発資料/
+  開発記録/              変更履歴（開発記録.txt = 索引、_v1〜_v8 = 各メジャー版）
+  開発ロードマップ/      開発計画（開発ロードマップ.txt = 全体計画＋索引）
+  運用ルール.txt         開発・運用ルール
+  AI向け仕様書.md        AI 向けのコードの索引
+  exceljs.bare.min.js    Excel 出力用の同梱ライブラリの原本（ExcelJS, MIT License。本体の HTML に埋め込み済み）
+README.md / CLAUDE.md / THIRD_PARTY_NOTICES.md / package.json
 ```
 
 ## 開発補助スクリプト（任意）
@@ -79,20 +86,20 @@ package.json           開発補助スクリプトの依存（Puppeteer / docx�
 スクリーンショット取得などの補助スクリプトを使う場合のみ、依存をインストールします。
 
 ```bash
-npm install        # Puppeteer / docx を取得
-node serve.js      # ローカルでプレビュー
+npm install                          # Puppeteer / docx を取得（リポジトリのルートで）
+node マニュアル/作成ツール/serve.js   # ローカルでプレビュー（http://localhost:8765/ で本体が開く）
 ```
 
-本体（`diagram_*.html`）の利用自体には何のインストールも不要です。
+本体（`アプリケーション本体/diagram_*.html`）の利用自体には何のインストールも不要です。
 
 ### 操作マニュアルの再生成
 
-マニュアル（.docx）は本体と同じ版番号で管理しています。次の順に実行すると再生成されます。
+マニュアル（.docx）は本体と同じ版番号で管理しています。リポジトリのルートで次の順に実行すると再生成されます。
 
 ```bash
-node serve.js              # 別ターミナルで起動したままにする
-node capture-puppeteer.js  # screenshots/manual/ に画面を撮り直す（章を絞るときは m03 m05 のように指定）
-node create-manual.js      # マニュアル/ビジネスダイアグラムメーカー_操作マニュアル_vX.YZ.docx を出力
+node マニュアル/作成ツール/serve.js              # 別ターミナルで起動したままにする
+node マニュアル/作成ツール/capture-puppeteer.js  # screenshots/manual/ に画面を撮り直す（章を絞るときは m03 m05 のように指定）
+node マニュアル/作成ツール/create-manual.js      # マニュアル/ビジネスダイアグラムメーカー_操作マニュアル_vX.YZ.docx を出力
 ```
 
 - 役割: 撮影の手順と注釈（赤枠・番号・カーソルの絵）＝`capture-puppeteer.js`、原稿＝`manual-content.js`、
@@ -101,7 +108,7 @@ node create-manual.js      # マニュアル/ビジネスダイアグラムメ�
   （Claude Code のクラウド環境など）では `NODE_PATH=/opt/node-tools/node_modules` を付けて実行します。
   Linux では日本語が中国語の字形にならないよう、IPAPゴシックを優先する設定を自動で使います。
 
-版を上げたときは `capture-puppeteer.js` の `URL` と `create-manual.js` の `APP_VERSION` も
+版を上げたときは `マニュアル/作成ツール/` の `capture-puppeteer.js` の `URL`・`serve.js` の既定のページ・`create-manual.js` の `APP_VERSION` も
 新しい版に合わせてください（旧版はリネームで消えるため、放置すると撮影が 404 で落ちます）。
 マニュアル本体（`マニュアル/` の .docx）はリポジトリで管理しています。撮影した画面（`screenshots/`）とそれ以外の .docx・.pdf は
 `.gitignore` 対象で、リポジトリには含まれません。

@@ -1,10 +1,10 @@
 // 操作マニュアル用のスクリーンショット撮影（2026-10 全面改訂＝注釈付きの画面・手順の連続画面・部分拡大・実物画像）
 //
-// 使い方（このフォルダで）:
-//   node serve.js                    … 別ターミナルで起動したままにする
-//   node capture-puppeteer.js        … 全部撮る（screenshots/manual/ へ出力）
-//   node capture-puppeteer.js m03 m05 … 章を絞って撮る（撮影一覧 _manifest.json は既存分とマージ）
-//   その後 node create-manual.js で .docx を作る
+// 使い方（リポジトリのルートで）:
+//   node マニュアル/作成ツール/serve.js                    … 別ターミナルで起動したままにする
+//   node マニュアル/作成ツール/capture-puppeteer.js        … 全部撮る（ルートの screenshots/manual/ へ出力）
+//   node マニュアル/作成ツール/capture-puppeteer.js m03 m05 … 章を絞って撮る（撮影一覧 _manifest.json は既存分とマージ）
+//   その後 node マニュアル/作成ツール/create-manual.js で .docx を作る
 //
 // ブラウザ: puppeteer があればそれを、無ければ playwright の Chromium を使う（Windows＝npm install 済みの puppeteer／
 //   クラウド・Linux＝NODE_PATH=/opt/node-tools/node_modules で playwright）。どちらでも同じ手順で撮れるよう、
@@ -22,8 +22,10 @@ const fs = require('fs');
 const os = require('os');
 
 // マニュアル用の撮影対象。版を上げたらここも上げる（旧版はリネームで消えるため参照できなくなる）。
-const URL = 'http://localhost:8765/diagram_v8.32.html';
-const outDir = path.join(__dirname, 'screenshots', 'manual');
+// serve.js はリポジトリのルートを配る＝本体は アプリケーション本体/ の下（日本語のフォルダ名は URL 用に符号化する）
+const URL = 'http://localhost:8765/' + encodeURI('アプリケーション本体/diagram_v8.32.html');
+// 撮った画面はリポジトリのルートの screenshots/manual/（.gitignore 対象）
+const outDir = path.join(__dirname, '..', '..', 'screenshots', 'manual');
 const VW = 1600, VH = 900, DSF = 2;   // メニューバーが ‹ › なしで全部見える幅（実測 1583px）・2 倍の解像度
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -599,6 +601,32 @@ sections.m04 = async () => {
     });
     await page.mouse.up(); await wait(200);
   }
+  // 書類を接続線の上へ（線に吸い付くとピンクの帯）
+  await open('flowchart');
+  await ev(() => {
+    S.gridOn = false; updateGridBtn();
+    const a = addNode('rect', 160, 180, { text: '見積を作成' });
+    const b = addNode('rect', 560, 180, { text: '見積を送付' });
+    addEdge(a.id, b.id);
+    addNode('doc', 360, 300, { text: '見積書' });
+    S.sel = []; render(); markSaved();
+  });
+  {
+    const st = await pt({ node: '見積書', at: 'c' });
+    const ly = await ev(() => { const a = S.nodes.find(n => n.text === '見積を作成'); return a.y + a.h / 2; });
+    const tgt = await d2c(360, ly + 5);
+    await page.mouse.move(st[0], st[1], { steps: 3 }); await page.mouse.down();
+    await page.mouse.move(st[0] + 10, st[1] - 40, { steps: 5 });
+    await page.mouse.move(tgt[0], tgt[1], { steps: 8 });
+    await wait(250);
+    const ok = await ev(() => { const d = S.nodes.find(n => n.text === '見積書'), a = S.nodes.find(n => n.text === '見積を作成'); return Math.abs(d.y + overlayCoreDY(d) - (a.y + a.h / 2)) < 0.5; });
+    if (!ok) throw new Error('書類が接続線に吸い付いていません');
+    await shot('m04_overlay_line', {
+      clip: [{ node: '見積を作成', pad: 30 }, { node: '見積を送付', pad: 30 }, { node: '見積書', pad: 30 }], pad: 6,
+      anno: [{ cursor: tgt }],
+    });
+    await page.mouse.up(); await wait(200);
+  }
 
   // ---- 4.7 ハンドツール ----
   await open('swimlane'); await sampleApproval();
@@ -836,6 +864,16 @@ sections.m05 = async () => {
   await page.mouse.move(5, VH - 5);
   await ev(() => { S.sel = []; render(); });
   await shot('m05_label_3', { clip: lb, pad: 0 });
+  {
+    // ラベルを掴んで、いったん線から離し、線の近く（10px 以内）へ戻す＝線の上に吸い付いてピンクの帯が出る
+    const p2 = [lp[0] - 70, lp[1] + 6];
+    await page.mouse.move(lp[0], lp[1], { steps: 3 }); await page.mouse.down();
+    await page.mouse.move(lp[0] - 30, lp[1] - 40, { steps: 5 });
+    await page.mouse.move(p2[0], p2[1], { steps: 8 }); await wait(250);
+    if (!(await ev(() => !!document.getElementById('label-snap-guide')))) throw new Error('ラベルの吸着の帯が出ていません');
+    await shot('m05_label_snap', { clip: lb, pad: 0, anno: [{ cursor: [p2[0] + 2, p2[1] + 2] }] });
+    await page.mouse.up(); await wait(200);
+  }
 
   // ---- 5.6 経路の編集（区間の四角・端点のオレンジ丸）----
   await open('flowchart');
@@ -888,6 +926,21 @@ sections.m05 = async () => {
       { box: { sel: '#g-nodes text', text: '⧉' }, n: 3, at: 't', out: true, pad: 4 },
     ],
   });
+  // ドラッグで囲んで置く（押したまま対角へ）
+  await open('swimlane'); await sampleApproval();
+  await click('#ps-group_box');
+  {
+    const d0 = await pt({ node: '内容を確認', at: 'tl', dx: -40, dy: -50 });
+    const d1 = await pt({ node: '承認する?', at: 'br', dx: 30, dy: 30 });
+    await page.mouse.move(d0[0], d0[1], { steps: 4 }); await page.mouse.down();
+    await page.mouse.move(d1[0], d1[1], { steps: 10 }); await wait(250);
+    const dArea = { c: [d0[0] - 60, d0[1] - 40, d1[0] - d0[0] + 140, d1[1] - d0[1] + 90] };
+    await shot('m05_grp_drag', { clip: dArea, pad: 0, anno: [{ badge: 1, at: [d0[0] - 16, d0[1] - 16] }, { cursor: d1 }] });
+    await page.mouse.up(); await wait(250);
+    const n = await ev(() => S.nodes.filter(n => n.type === 'group_box').length);
+    if (n !== 1) throw new Error('ドラッグでグループ枠が置かれていません');
+    await ev(() => clearPal());
+  }
 };
 
 // グループ枠の切り欠き（L 型・凹・凸・階段）を別々の枠で撮る
@@ -1190,6 +1243,25 @@ sections.m07 = async () => {
   await click({ sel: '#lane-list .lane-color-dot', i: 1 }); await wait(250);
   await shot('m07_color', { clip: ['#lane-choice', { sel: '#lane-list .lr', i: 1 }], pad: 8 });
   await ev(() => document.getElementById('lane-choice')?.remove());
+  // 7.3 レーンの削除＝後ろのレーンのシェイプが削除したレーンの幅だけ寄る
+  await open('swimlane'); await lanes3(['申請者', '確認', '総務部']);
+  await ev(() => {
+    const lx = (i) => laneX(S.lanes[i].id) + S.lanes[i].w / 2, h = headerSize();
+    const a = addNode('rect', lx(0), h + 80, { text: '申請書を作成' });
+    addNode('rect', lx(1), h + 80, { text: '書式を確認' });
+    const c = addNode('rect', lx(2), h + 180, { text: '受付・登録' });
+    const d = addNode('rect', lx(2), h + 280, { text: '台帳に記録' });
+    addEdge(a.id, c.id); addEdge(c.id, d.id);
+    S.sel = []; snap(); render(); lanePanel(); markSaved();
+  });
+  await page.mouse.move(5, VH - 5);
+  const DL = { d: [0, 0, 680, 400] };
+  await shot('m07_delete_1', { clip: DL, pad: 0 });
+  await ev(() => { document.querySelectorAll('#lane-list .ldel')[1].id = '__mnl_ldel'; });
+  await clickSel('#__mnl_ldel'); await wait(300);   // 「確認」のレーンの ✕（サイドバーの下＝画面外のことがあるので要素クリック）
+  await page.mouse.move(5, VH - 5);
+  if ((await ev(() => S.lanes.length)) !== 2) throw new Error('レーンが削除されていません');
+  await shot('m07_delete_2', { clip: DL, pad: 0 });
 };
 
 sections.m08 = async () => {
@@ -1476,21 +1548,35 @@ sections.m11 = async () => {
   await ev(() => {
     S.gridOn = false; updateGridBtn();
     const st = addNode('terminal', 300, 60, { text: 'Ctrl+S（上書き保存）' });
-    const d1 = addNode('diamond', 300, 180, { text: 'このページで保存先を\n選んである?' });
-    const a1 = addNode('rect', 640, 180, { text: 'その保存先に書き込む' });
-    const d2 = addNode('diamond', 300, 330, { text: '開いているファイルの\n保存先を覚えている?' });
-    const a2 = addNode('rect', 640, 330, { text: '許可と中身を確かめて\n書き込む' });
-    const a3 = addNode('rect', 300, 470, { text: 'ファイル名を入れた\n保存画面を出す（初回）' });
-    const a4 = addNode('rect', 300, 580, { text: '選んだファイルに書き込み\n保存先を覚える' });
-    const en = addNode('terminal', 640, 580, { text: '保存完了' });
+    const d1 = addNode('diamond', 300, 190, { text: '上書き先が\n決まっている?' });
+    const a1 = addNode('rect', 640, 190, { text: '上書き先のファイルに\n書き込む' });
+    const a3 = addNode('rect', 300, 330, { text: '保存先を選ぶ画面を出す\n（名前の候補＝図の名称）' });
+    const a4 = addNode('rect', 300, 450, { text: '選んだファイルに書き込み\n以後の上書き先にする' });
+    const en = addNode('terminal', 640, 450, { text: '保存完了' });
     const E = (f, t, l) => { const id = addEdge(f.id, t.id); if (l) S.edges.find(x => x.id === id).label = l; };
-    E(st, d1); E(d1, a1, 'はい'); E(d1, d2, 'いいえ'); E(a1, en); E(d2, a2, 'はい'); E(d2, a3, 'いいえ'); E(a2, en); E(a3, a4); E(a4, en);
+    E(st, d1); E(d1, a1, 'はい'); E(d1, a3, 'いいえ'); E(a1, en); E(a3, a4); E(a4, en);
     S.sel = []; render(); markSaved();
   });
   await page.mouse.move(5, VH - 5);
   {
     const b = await ev(() => { const ns = S.nodes; const x0 = Math.min(...ns.map(n => n.x)), y0 = Math.min(...ns.map(n => n.y)), x1 = Math.max(...ns.map(n => n.x + n.w)), y1 = Math.max(...ns.map(n => n.y + n.h)); return [x0 - 24, y0 - 20, x1 - x0 + 48, y1 - y0 + 40]; });
     await shot('m11_save_flow', { clip: { d: b }, pad: 0 });
+  }
+  // 保存したファイルを開いた直後の「上書き先」のダイアログ（2 通り）
+  await open('swimlane'); await sampleApproval();
+  for (const [name, known] of [['m11_bind_known', true], ['m11_bind_pick', false]]) {
+    const shown = await ev(async (known) => {
+      if (!FSA_OK) return false;
+      const orig = fhLoad;
+      window.fhLoad = async () => (known ? { name: '経費精算の承認フロー.html' } : null);
+      fileHandle = null; fileHandleTried = false;
+      try { await askBindSaveTarget(); } finally { window.fhLoad = orig; }
+      return document.getElementById('bind-modal').style.display === 'flex';
+    }, known);
+    if (!shown) throw new Error('上書き先のダイアログが出ません');
+    await wait(200);
+    await shot(name, { clip: '#bind-box', pad: 8 });
+    await ev(() => hideBind());
   }
   // 11.5 出力のジャンル
   await open('swimlane'); await sampleApproval();
@@ -1568,7 +1654,7 @@ sections.m11 = async () => {
   await ev(() => { toast('上書き保存しました', '', '経費精算の承認フロー.html', 60000); });
   await wait(400);
   await shot('m11_toast_ok', { clip: '#toast', pad: 10 });
-  await ev(() => { toast('保存に失敗しました', 'ng', '同じ内容をダウンロードフォルダに保存しました: 経費精算の承認フロー.html', 60000); });
+  await ev(() => { toast('上書き保存に失敗しました', 'ng', 'ファイルが他のアプリで開かれているため書き込めません', 60000); });
   await wait(400);
   await shot('m11_toast_ng', { clip: '#toast', pad: 10 });
   await ev(() => toastHide());
