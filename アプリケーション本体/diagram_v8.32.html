@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ビジネスダイアグラムメーカー v8.32</title>
+<title>MultipurposeDiagramMaker v8.32</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;display:flex;flex-direction:column;height:100vh;overflow:hidden;user-select:none}
@@ -544,7 +544,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 //# sourceMappingURL=exceljs.bare.min.js.map</script>
 
 <div id="app-title-bar">
-  <span id="app-title-text">ビジネスダイアグラムメーカー v8.32</span>
+  <span id="app-title-text">MultipurposeDiagramMaker v8.32</span>
   <span class="diagram-type-label" id="dtype-label" onclick="toggleDTypeMenu(event)"></span>
   <!-- v8.12: 図の名称。図種バッジのすぐ右へ移設（旧＝左サイドバー最上段でラベルも無く埋もれていた） -->
   <input id="diagram-name" type="text" placeholder="図の名称を入力" aria-label="図の名称" oninput="onDiagramNameInput(this.value)"/>
@@ -15584,7 +15584,7 @@ async function expExcel(){
     for(let c=0;c<units;c++){ if(sub[c].start<=d) lo=c; else break; } return lo; };
 
   const wb=new ExcelJS.Workbook();
-  wb.creator='ビジネスダイアグラムメーカー';
+  wb.creator='MultipurposeDiagramMaker';
   const ws=wb.addWorksheet('工程表');
   ws.views=[{state:'frozen', xSplit:leftCols, ySplit:BAND+HR}];   // 左情報欄＋ヘッダーを固定
 
