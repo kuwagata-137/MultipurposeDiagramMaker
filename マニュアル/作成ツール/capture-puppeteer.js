@@ -1333,7 +1333,7 @@ sections.m10s = async () => {
   await shot('m10_flowchart', { clip: { d: [140, 20, 520, 490] }, pad: 0 });
 };
 
-// ---------- 第10章 樹状図 ----------
+// ---------- 第5章 樹状図（章の冒頭の例）----------
 sections.m10o = async () => {
   await open('orgchart');
   await ev(() => {
@@ -1347,20 +1347,184 @@ sections.m10o = async () => {
   await page.mouse.move(5, VH - 5);
   const ob = await ev(() => { const ns = S.nodes; const x0 = Math.min(...ns.map(n => n.x)), y0 = Math.min(...ns.map(n => n.y)), x1 = Math.max(...ns.map(n => n.x + n.w)), y1 = Math.max(...ns.map(n => n.y + n.h)); return [x0 - 40, y0 - 30, x1 - x0 + 80, y1 - y0 + 90]; });
   await shot('m10_org', { clip: { d: ob }, pad: 0, within: '#canvas-wrap' });   // 左端が図の座標で負になる＝サイドバーを写さない
-  // 選んだところ（＋部下追加など）
-  await click({ node: '開発部長' }); await wait(250);
-  await page.mouse.move(5, VH - 5);
-  await shot('m10_org_sel', {
-    clip: { d: ob }, pad: 0, within: '#canvas-wrap',
+};
+
+// ---------- 第5章 樹状図（作例「総務部の組織図」と機能ごとの画面）----------
+// 操作は実際の UI（パレットのクリック配置・選んだノードの ＋／≡／▣・編集ダイアログ・⊞ 整列・ドラッグ）で行う。
+// 役職名・氏名の入力は手順 2 だけダイアログで実際に打ち、ほかの箱は同じ結果を ev で入れる（作例の下ごしらえ）。
+sections.org = async () => {
+  const ORG_BTN = '#g-dividers g.ui-only';
+  // ノードの外接矩形（図の座標）＋余白。ボタンが下に出るので下は多めに取る
+  const allBox = (m = 30, bottom = 40) => ev(([m, bottom]) => {
+    const ns = S.nodes; const x0 = Math.min(...ns.map(n => n.x)), y0 = Math.min(...ns.map(n => n.y));
+    const x1 = Math.max(...ns.map(n => n.x + n.w)), y1 = Math.max(...ns.map(n => n.y + n.h));
+    return [x0 - m, y0 - m, x1 - x0 + m * 2, y1 - y0 + m + bottom];
+  }, [m, bottom]);
+  // 役職名（1段目）でノードを引き、役職名と氏名を入れる
+  const setRole = (pairs) => ev((pairs) => {
+    for (const [cur, role, name] of pairs) {
+      const n = S.nodes.find(x => x.type === 'org_node' && x.sections && x.sections.some(s => s.text === cur));
+      if (!n) throw new Error('ノードがありません: ' + cur);
+      n.sections = [{ text: role, style: 'header' }, { style: 'table', cols: 1, rows: [[name]] }]; n.text = '';
+    }
+    snap(); render(); markSaved();
+  }, pairs);
+  // 親の子を、子の並び順で役職名を付ける（＋で増やした直後の箱は「役職名」のまま区別できないため）
+  const nameChildren = (parentRole, list) => ev(([parentRole, list]) => {
+    const p = S.nodes.find(x => x.sections && x.sections.some(s => s.text === parentRole));
+    const kids = orgChildrenOf(p.id).sort((a, b) => a.x - b.x);
+    if (kids.length < list.length) throw new Error('子が足りません: ' + parentRole);
+    list.forEach(([role, name], i) => { kids[i].sections = [{ text: role, style: 'header' }, { style: 'table', cols: 1, rows: [[name]] }]; kids[i].text = ''; });
+    snap(); render(); markSaved();
+  }, [parentRole, list]);
+  const away = () => page.mouse.move(5, VH - 5);
+  const btn = (i) => ({ sel: ORG_BTN, i });
+
+  await open('orgchart');
+  const nm = await ev(() => { const el = document.getElementById('diagram-name'); el.value = '総務部 組織図'; onDiagramNameInput(el.value); markSaved(); return 1; });
+  // 1. パレットで「ノード（ラベル有）」を選び、キャンバスをクリックして置く
+  await clickSel('#ps-org_node');
+  await move({ dp: [200, 60] });
+  await page.mouse.down(); await page.mouse.up(); await wait(250);
+  await page.keyboard.press('Escape'); await wait(100);
+  await clean();
+  await move({ dp: [220, 78] });
+  await shot('m_org_01_place', {
+    clip: ['#ps-org_node', { d: await allBox(20, 20) }], pad: 10,
+    anno: [{ box: '#ps-org_node', n: 1, at: 'r', out: true, pad: 2 }, { box: { node: '役職名' }, n: 2, at: 'r', out: true, pad: 4 }, { cursor: { dp: [220, 78] } }],
+  });
+  // 2. ダブルクリックで編集ダイアログ → 役職名と氏名を入力
+  await dblclick({ node: '役職名' }); await wait(400);
+  await page.click('#om-title', { clickCount: 3 }); await page.keyboard.type('総務部長');
+  await page.click('.om-cell', { clickCount: 3 }); await page.keyboard.type('山田 太郎');
+  await wait(100);
+  await shot('m_org_02_edit', {
+    clip: '#org-modal-box', pad: 12,
+    anno: [{ box: '#om-title', n: 1, at: 'l', out: true, pad: 2 }, { box: '.om-cell', n: 2, at: 'l', out: true, pad: 2 }, { box: '#org-modal-footer .btn-primary', n: 3, at: 'b', out: true, pad: 2 }],
+  });
+  await page.click('#org-modal-footer .btn-primary'); await wait(250); await clean();
+  // 3. 選んで ＋ を3回 → 課長の箱が3つ
+  await click({ node: '総務部長' }); await wait(200);
+  for (let k = 0; k < 3; k++) { await click(btn(0)); await wait(250); }
+  await clean(); await away();
+  await shot('m_org_03_add', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap', anno: [{ box: btn(0), n: 1, at: 'r', out: true, pad: 2, rx: 12, r: 11 }] });
+  // 4. 課長の役職名と氏名（ダイアログで入れたものと同じ結果を入れる）
+  await nameChildren('総務部長', [['総務課長', '佐藤 花子'], ['人事課長', '鈴木 一郎'], ['経理課長', '田中 美咲']]);
+  await ev(() => { S.sel = []; render(); });
+  await away();
+  await shot('m_org_04_named', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap' });
+  // 5. 総務課長の下に係長・主任
+  await click({ node: '総務課長' }); await wait(200);
+  for (let k = 0; k < 2; k++) { await click(btn(0)); await wait(250); }
+  await nameChildren('総務課長', [['総務係長', '高橋 健'], ['庶務主任', '伊藤 彩']]);
+  await ev(() => { S.sel = []; render(); });
+  await click({ node: '人事課長' }); await wait(200);
+  await click(btn(0)); await wait(250);
+  await nameChildren('人事課長', [['人事係長', '渡辺 誠']]);
+  await ev(() => { S.sel = []; render(); markSaved(); });
+  // 6. ⊞ 整列（足した箱をツリーの形に並べ直す）
+  await clickSel('#btn-arrange'); await wait(300); await clean(); await away();
+  await shot('m_org_05_arrange', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap' });
+  // 7. 総務課長を選んで ▣ → 配下を部門枠で囲む → 枠の見出しをダブルクリックして「総務課」
+  await click({ node: '総務課長' }); await wait(200);
+  await click(btn(2)); await wait(300);
+  const gb = await ev(() => { const g = S.nodes.find(n => n.type === 'org_group'); return [g.x + g.w / 2, g.y + 10]; });
+  await dblclick({ dp: gb }); await wait(250);
+  await page.keyboard.down('Control'); await page.keyboard.press('a'); await page.keyboard.up('Control'); await page.keyboard.type('総務課'); await page.keyboard.press('Enter'); await wait(250);
+  await ev(() => { S.sel = []; render(); markSaved(); });
+  await click({ node: '総務課長' }); await wait(200); await away();
+  await shot('m_org_07_wrap', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap', anno: [{ box: btn(2), n: 1, at: 'r', out: true, pad: 2, rx: 12, r: 11 }] });
+  await ev(() => { S.sel = []; render(); }); await away();
+  await shot('m_org_done', { clip: { d: await allBox(30, 30) }, pad: 0, within: '#canvas-wrap' });
+  // 作例の状態を控える（以下の節はここから始める）
+  const saved = await ev(() => JSON.stringify({ nodes: S.nodes, edges: S.edges }));
+  const reset = () => ev((j) => { const o = JSON.parse(j); S.nodes = o.nodes; S.edges = o.edges; S.sel = []; if (S.orientation !== 'vertical') toggleOrientation(); snap(); render(); markSaved(); }, saved);
+
+  // 5.4 選んだノードのボタン（＋・≡・▣）
+  await click({ node: '総務課長' }); await wait(200); await away();
+  const kb = await ev(() => { const p = S.nodes.find(x => x.sections && x.sections.some(s => s.text === '総務課長')); const ids = [p.id, ...orgChildrenOf(p.id).map(n => n.id)]; const ns = S.nodes.filter(n => ids.includes(n.id)); const x0 = Math.min(...ns.map(n => n.x)), y0 = Math.min(...ns.map(n => n.y)), x1 = Math.max(...ns.map(n => n.x + n.w)), y1 = Math.max(...ns.map(n => n.y + n.h)); return [x0 - 40, y0 - 40, x1 - x0 + 80, y1 - y0 + 70]; });
+  await shot('m_org_btns', {
+    clip: { d: kb }, pad: 0, within: '#canvas-wrap',
+    anno: [btn(0), btn(1), btn(2)].map((b, i) => ({ box: b, n: i + 1, at: ['l', 'b', 'r'][i], out: true, pad: 2, rx: 12, r: 10 })),
+  });
+  // 5.5 編集ダイアログ（行・列を足したところ）
+  await dblclick({ node: '人事課長' }); await wait(400);
+  await click({ sel: '.om-add', i: 1 });
+  await wait(150);
+  await ev(() => orgAddRow()); await wait(150);
+  await ev(() => { const cs = [...document.querySelectorAll('#org-modal-fields .om-cell')]; const v = ['鈴木 一郎', '課員 5名', '人事・採用', '研修']; cs.forEach((c, i) => { c.value = v[i] || ''; }); });
+  await shot('m_org_dialog', {
+    clip: '#org-modal-box', pad: 12,
     anno: [
-      { box: { sel: '#g-dividers g.ui-only', i: 0 }, n: 1, at: 'b', out: true, pad: 2, rx: 12, r: 11 },
-      { box: { sel: '#g-dividers g.ui-only', i: 1 }, n: 2, at: 'b', out: true, pad: 2, rx: 12, r: 11 },
+      { box: '#om-title', n: 1, at: 'l', out: true, pad: 2 },
+      { box: '#om-grid', n: 2, at: 'l', out: true, pad: 2 },
+      { box: { sel: '.om-add', i: 0 }, n: 3, at: 'b', out: true, pad: 2 },
+      { box: { sel: '.om-add', i: 1 }, n: 4, at: 'b', out: true, pad: 2 },
+      { box: { sel: '.om-xcol', i: 1 }, n: 5, at: 'r', out: true, pad: 2 },
+      { box: '#org-modal-footer .btn-primary', n: 6, at: 'b', out: true, pad: 2 },
     ],
   });
-  // 編集ダイアログ
-  await dblclick({ node: '開発部長' }); await wait(400);
-  await shot('m10_org_edit', { clip: '#org-modal-box', pad: 10 }).catch(async () => { await shot('m10_org_edit', { clip: '#org-modal', pad: 0 }); });
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape'); await ev(() => closeOrgModal()); await wait(150);
+  // 5.6 親の付け替え（庶務主任を人事課長の上へドラッグ）
+  await reset();
+  const from = await pt({ node: '庶務主任' }), to = await pt({ node: '人事課長' });
+  await page.mouse.move(from[0], from[1], { steps: 4 }); await page.mouse.down();
+  await page.mouse.move((from[0] + to[0]) / 2, (from[1] + to[1]) / 2, { steps: 8 });
+  await page.mouse.move(to[0], to[1] + 4, { steps: 8 }); await wait(200);
+  await shot('m_org_reparent_1', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap', anno: [{ cursor: [to[0], to[1] + 4] }] });
+  await page.mouse.up(); await wait(300); await clean();
+  await ev(() => { S.sel = []; render(); }); await away();
+  await shot('m_org_reparent_2', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap' });
+  // 5.7 整列の前と後（箱を散らしてから ⊞ 整列）
+  await reset();
+  await ev(() => { const dx = [0, -60, 50, 30, -40, 70, 20, -30]; S.nodes.filter(n => n.type === 'org_node').forEach((n, i) => { n.x += 70 + dx[i % dx.length] * 1.5; n.y += dx[(i + 3) % dx.length]; }); S.sel = []; render(); markSaved(); });
+  await away();
+  const ab = await allBox();
+  await shot('m_org_arrange_1', { clip: { d: ab }, pad: 0, within: '#canvas-wrap' });
+  await clickSel('#btn-arrange'); await wait(300); await clean(); await away();
+  await shot('m_org_arrange_2', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap' });
+  // 5.8 リストの形（総務課長の ≡）
+  await reset();
+  await click({ node: '総務課長' }); await wait(200);
+  await click(btn(1)); await wait(300); await clean();
+  await click({ node: '総務課長' }); await wait(200); await away();
+  await shot('m_org_stack', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap', anno: [{ box: btn(1), n: 1, at: 'r', out: true, pad: 2, rx: 12, r: 11 }] });
+  // 5.9 部門枠の入れ子（総務部長を ▣ で囲み「総務部」）
+  await reset();
+  await click({ node: '総務部長' }); await wait(200);
+  await click(btn(2)); await wait(300);
+  await ev(() => { const g = S.nodes.find(n => n.type === 'org_group' && n.text === '部門名'); g.text = '総務部'; S.sel = []; snap(); render(); markSaved(); });
+  await away();
+  await shot('m_org_wrap_nest', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap' });
+  // 5.10 接続線（横棒の高さのハンドル）: 総務部長の真下の縦線をクリックして選ぶ
+  await reset();
+  const bp = await ev(() => { const p = S.nodes.find(x => x.sections && x.sections.some(s => s.text === '総務部長')); const k = orgChildrenOf(p.id).sort((a, b) => a.x - b.x)[0]; return [k.x + k.w / 2 + 20, (p.y + p.h + k.y) / 2]; });
+  await click({ dp: bp }); await wait(250); await away();
+  await shot('m_org_bus', {
+    clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap',
+    anno: [{ box: 'rect[width="10"][fill="white"][stroke="#2563eb"]', n: 1, at: 'r', out: true, pad: 4 }],
+  });
+  // 5.11 横向き
+  await reset();
+  await clickSel('#btn-orient'); await wait(300); await clickSel('#btn-arrange'); await wait(300); await clean(); await away();
+  await shot('m_org_horiz', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap' });
+  await clickSel('#btn-orient'); await wait(300);
+  // 5.12 表（CSV）から作る
+  await ev(() => openText2Diagram()); await wait(300);
+  await ev(() => {
+    const f = document.getElementById('t2d-format'); f.value = 'csv-orgchart'; f.dispatchEvent(new Event('change'));
+    const ta = document.getElementById('t2d-input');
+    ta.value = '役職,氏名,上司\n総務部長,山田 太郎,\n総務課長,佐藤 花子,山田 太郎\n人事課長,鈴木 一郎,山田 太郎\n総務係長,高橋 健,佐藤 花子\n人事係長,渡辺 誠,鈴木 一郎';
+    ta.dispatchEvent(new Event('input'));
+  });
+  await wait(200);
+  await shot('m_org_csv_1', { clip: '#t2d-modal > div:nth-child(2)', pad: 4 });
+  await page.keyboard.down('Control'); await page.keyboard.press('Enter'); await page.keyboard.up('Control');
+  await wait(600);
+  await ev(() => { try { closeText2Diagram(); } catch (e) { } });
+  await clean(); await away();
+  await shot('m_org_csv_2', { clip: { d: await allBox() }, pad: 0, within: '#canvas-wrap' });
+  void nm;
 };
 
 // ---------- 第10章 ガントチャート ----------
