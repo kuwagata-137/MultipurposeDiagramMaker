@@ -1241,6 +1241,8 @@ sections.m07 = async () => {
   await shot('m07_width_drag', { clip: { d: [200, 0, 520, 330] }, pad: 0, anno: [{ cursor: b1 }, { arrow: [[b0[0], b0[1] + 50], [b1[0], b1[1] + 50]] }] });
   await page.mouse.up(); await wait(200);
   // 7.6 色
+  // 日本語の環境ではサイドバーの中身が少し高くなり、丸が下端の「隠す」帯の下に入る＝押す前に見える位置へ
+  await ev(() => document.querySelectorAll('#lane-list .lane-color-dot')[1].scrollIntoView({ block: 'center' })); await wait(150);
   await click({ sel: '#lane-list .lane-color-dot', i: 1 }); await wait(250);
   await shot('m07_color', { clip: ['#lane-choice', { sel: '#lane-list .lr', i: 1 }], pad: 8 });
   await ev(() => document.getElementById('lane-choice')?.remove());
