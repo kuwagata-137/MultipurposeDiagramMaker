@@ -68,8 +68,9 @@ async function launch() {
     };
   }
   const { chromium } = require('playwright');
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DSF });
+  // 日付欄の表示の形（2026/11/02）は Chromium が環境変数 LANG で決める（locale の指定だけでは 11/02/2026 のまま）
+  const browser = await chromium.launch({ env: Object.assign({}, process.env, { LANG: 'ja_JP.UTF-8', LC_ALL: 'ja_JP.UTF-8', LANGUAGE: 'ja' }) });
+  const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DSF, locale: 'ja-JP' });
   const page = await ctx.newPage();
   return {
     browser, page, kind: 'playwright',
@@ -1527,7 +1528,7 @@ sections.org = async () => {
   void nm;
 };
 
-// ---------- 第10章 ガントチャート ----------
+// ---------- 第6章 ガントチャート（機能ごとの画面＝旧10.4 から引き継いだもの。画像の名前は m10_ のまま）----------
 async function ganttSample(opts = {}) {
   await ev((o) => {
     S.nodes = []; S.edges = [];
@@ -1581,10 +1582,6 @@ sections.m10g = async () => {
       ],
     });
   }
-  // 詳細編集（ダブルクリック）
-  await dblclick({ node: '配筋' }); await wait(400);
-  await shot('m10_gantt_modal', { clip: '#gantt-modal-box', pad: 8 });
-  await page.keyboard.press('Escape'); await ev(() => { try { closeGanttModal(); } catch (e) { } });
   // 依存関係の種類
   await ev(() => { S.sel = []; render(); });
   // 見出し欄（表題部・承認欄・凡例）: 全幅を収めるため画面を広げる
@@ -1631,6 +1628,235 @@ sections.m10g = async () => {
   await shot('btn_gantt_dates', { clip: { sel: '#gantt-tools .rrow', i: 0 }, pad: 2 });
   await shot('btn_gantt_wrap', { clip: { sel: '#gantt-tools .rrow', i: 1 }, pad: 2 });
   await shot('btn_excel_on', { clip: '#btn-excel', pad: 2 });
+};
+
+// ---------- 第6章 ガントチャート（作例「倉庫の改修工事の工程表」と機能ごとの画面）----------
+// 操作は実際の UI（サイドバーの欄・タスク一覧・パレットのドラッグ・編集ダイアログ・C キーの接続・フェーズのハンドル）で行う。
+// 同じ操作のくり返し（残りのタスク・フェーズ・依存関係）は、UI で入れたものと同じ結果を ev で入れる（作例の下ごしらえ）。
+sections.gantt = async () => {
+  const away = async () => { await page.mouse.move(5, VH - 5); await ev(() => hint('')); };   // ヒント帯が図に重ならないように消す
+  const setVal = (sel, v) => ev(([sel, v]) => { const el = document.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }, [sel, v]);
+  const typeIn = async (sel, v) => { await page.click(sel, { clickCount: 3 }); await page.keyboard.type(v); };
+  // 工程表の範囲（画面座標）: 図の左上から、最後の行の下＋余白まで。w＝幅（省略時は図の幅）
+  const chartBox = (o = {}) => ev((o) => {
+    const svg = document.getElementById('diagram-svg').getBoundingClientRect(), cw = document.getElementById('canvas-wrap').getBoundingClientRect();
+    const rows = S.nodes.filter(n => ganttIsRowNode(n.type));
+    const ctm = document.getElementById('diagram-svg').getScreenCTM();
+    const by = rows.length ? Math.max(...rows.map(n => n.y + n.h)) : 300;
+    const yb = new DOMPoint(0, by).matrixTransform(ctm).y + (o.bottom || 18);
+    const x0 = Math.max(cw.left, svg.left), y0 = Math.max(cw.top, svg.top) + (o.top || 0);
+    const x1 = Math.min(cw.right - 16, svg.right, o.w ? x0 + o.w : 1e9);
+    return { c: [x0, y0, x1 - x0, Math.min(cw.bottom - 16, yb) - y0] };
+  }, o);
+  // 作例のタスク（工程）を入れる。phase＝フェーズ名（無ければフェーズなし）
+  const putTasks = (list) => ev((list) => {
+    const ph = {};
+    list.forEach(t => { if (t.phase && !ph[t.phase]) { const p = S.nodes.find(n => n.type === 'gantt_summary' && n.text === t.phase) || { id: uid(), type: 'gantt_summary', text: t.phase, color: t.pcolor }; if (!S.nodes.includes(p)) S.nodes.push(p); ph[t.phase] = p; } });
+    list.forEach(t => {
+      let n = S.nodes.find(x => ganttIsRowNode(x.type) && x.text === t.text);
+      if (!n) { n = { id: uid(), type: t.ms ? 'gantt_milestone' : 'gantt_task', row: 999, progress: 0, desc: '', assignee: '' }; S.nodes.push(n); }
+      n.text = t.text; n.row = t.row;
+      if (t.ms) n.date = t.s; else { n.startDate = t.s; n.endDate = t.e; n.progress = t.p || 0; n.desc = t.desc || ''; n.assignee = t.who || ''; }
+      if (t.phase) n.phaseId = ph[t.phase].id; else delete n.phaseId;
+    });
+    ganttNodesSorted().forEach((nd, i) => nd.row = i);
+    ganttPruneEmptyPhases(); ganttSyncAllTaskColors();
+    S.sel = []; snap(); render(); markSaved();
+  }, list);
+  const T = [
+    { text: '仮設・養生', s: '2026-11-02', e: '2026-11-06', p: 100, desc: '足場・床の養生', who: '佐藤', phase: '準備工事', pcolor: '#0e7490' },
+    { text: '資材搬入', s: '2026-11-09', e: '2026-11-10', p: 100, who: '佐藤', phase: '準備工事', pcolor: '#0e7490' },
+    { text: '既存内装の撤去', s: '2026-11-11', e: '2026-11-19', p: 60, desc: '天井・壁・床', who: '鈴木', phase: '解体工事', pcolor: '#b45309' },
+    { text: '廃材の搬出', s: '2026-11-16', e: '2026-11-20', p: 20, who: '鈴木', phase: '解体工事', pcolor: '#b45309' },
+    { text: '軽量鉄骨下地', s: '2026-11-24', e: '2026-12-02', who: '田中', phase: '内装工事', pcolor: '#1e3a8a' },
+    { text: 'ボード張り', s: '2026-12-03', e: '2026-12-10', who: '田中', phase: '内装工事', pcolor: '#1e3a8a' },
+    { text: '塗装・床仕上げ', s: '2026-12-11', e: '2026-12-18', who: '高橋', phase: '内装工事', pcolor: '#1e3a8a' },
+    { text: '完了検査', ms: true, s: '2026-12-21', phase: '検査・引渡し', pcolor: '#15803d' },
+    { text: '引渡し', ms: true, s: '2026-12-24', phase: '検査・引渡し', pcolor: '#15803d' },
+  ].map((t, i) => Object.assign({ row: i }, t));
+
+  await open('gantt');
+  await away();
+  // 1. 新しいガントチャート（見本のタスクが入った状態）
+  let cb = await chartBox({ w: 1180 });
+  await shot('m_gantt_01_new', { clip: cb, pad: 0 });
+  // 2. 図の名称・開始日・完了日・目盛り（サイドバーのプロジェクト設定）
+  await typeIn('#diagram-name', '○○倉庫 改修工事');
+  await setVal('#gantt-start-sb', '2026-11-02');
+  await setVal('#gantt-end-sb', '2026-12-25');
+  await setVal('#gantt-scale-sb', 'day');
+  await clean(); await away();
+  await shot('m_gantt_02_settings', {
+    clip: [{ sel: '#gantt-settings .ph', i: 0 }, { sel: '#gantt-settings .gset-body', i: 0 }], pad: 6,
+    anno: [
+      { box: '#gantt-start-sb', n: 1, at: 'r', out: true, pad: 2 },
+      { box: '#gantt-end-sb', n: 2, at: 'r', out: true, pad: 2 },
+      { box: '#gantt-scale-sb', n: 3, at: 'r', out: true, pad: 2 },
+    ],
+  });
+  // 3. タスク一覧で見本を書き換える（1・2行目の名前を打ち替え）／残りは ✕ で消す
+  await ev(() => document.getElementById('gantt-list-sec').scrollIntoView({ block: 'end' }));
+  await typeIn('#gantt-row-list .lr:nth-child(1) .lname', '仮設・養生');
+  await typeIn('#gantt-row-list .lr:nth-child(2) .lname', '資材搬入');
+  await ev(() => { document.activeElement.blur(); render(); }); await wait(200);
+  await shot('m_gantt_03_list', {
+    clip: '#gantt-list-sec', pad: 6,
+    anno: [
+      { box: '#gantt-row-list .lr:nth-child(1) .lname', n: 1, at: 'l', out: true, pad: 1 },
+      { box: '#gantt-row-list .lr:nth-child(3) .ldel', n: 2, at: 'r', out: true, pad: 1 },
+    ],
+  });
+  for (let k = 0; k < 4; k++) { await page.click('#gantt-row-list .lr:nth-child(3) .ldel'); await wait(150); await ev(() => { document.activeElement.blur(); render(); }); await wait(150); }
+  await ev(() => { document.getElementById('sidebar').scrollTop = 0; });
+  // 残った2つに日程を入れ、フェーズを外す（手順 5・6 で作り直す）
+  await putTasks(T.slice(0, 2).map(t => Object.assign({}, t, { phase: null })));
+  await ev(() => { S.nodes = S.nodes.filter(n => n.type !== 'gantt_summary'); ganttSyncAllTaskColors(); ganttSetHoliday('jp', true); S.gantt.colWidth = 22; S.sel = []; snap(); render(); markSaved(); });
+  // 4. パレットの「タスク」を資材搬入の下へドラッグ（離す前＝入る位置の青い線）
+  const below = await ev(() => { const n = S.nodes.find(x => x.text === '資材搬入'); return [n.x + 120, n.y + n.h * 0.8]; });
+  await drag('#ps-gantt_task', { dp: below }, { hold: true }); await wait(250);
+  cb = await chartBox({ w: 780, bottom: 60 });
+  const cur = await d2c(below[0], below[1]);
+  await shot('m_gantt_04_insert', { clip: ['#ps-gantt_task', cb], pad: 0, anno: [{ box: '#ps-gantt_task', n: 1, at: 'r', out: true, pad: 2 }, { cursor: cur }] });
+  await page.mouse.up(); await wait(300); await clean();
+  // 5. 置いたタスクをダブルクリック → タスク名・概要・担当・日程・進捗
+  await dblclick({ node: '新規タスク' }); await wait(400);
+  await typeIn('#gm-name', '既存内装の撤去');
+  await typeIn('#gm-col-c0-r3-v', '天井・壁・床');
+  await typeIn('#gm-col-c0-r4-v', '鈴木');
+  await setVal('#gm-start', '2026-11-11'); await setVal('#gm-end', '2026-11-19');
+  await setVal('#gm-prog-num', '60'); await ev(() => { document.getElementById('gm-prog-range').value = 60; });
+  await shot('m_gantt_05_modal', {
+    clip: '#gantt-modal-box', pad: 8,
+    anno: [
+      { box: '#gm-name', n: 1, at: 'l', out: true, pad: 2 },
+      { box: '#gm-cols-field', n: 2, at: 'l', out: true, pad: 2 },
+      { box: '.gm-dates', n: 3, at: 'l', out: true, pad: 2 },
+      { box: '.gm-prog-row', n: 4, at: 'l', out: true, pad: 2 },
+      { box: '#gantt-modal-footer .btn-primary', n: 5, at: 'b', out: true, pad: 2 },
+    ],
+  });
+  await page.click('#gantt-modal-footer .btn-primary'); await wait(300); await clean();
+  // 残りのタスク・マイルストーン（同じ操作で入れたものと同じ結果）
+  await putTasks(T.map(t => Object.assign({}, t, { phase: null })));
+  // 6. 仮設・養生を選び、パレットの「フェーズ」を工程表へドラッグ → 仮設・養生を含むフェーズ
+  await click({ node: '仮設・養生' }); await wait(350);
+  const mid = await ev(() => { const n = S.nodes.find(x => x.text === '資材搬入'); return [n.x + n.w + 160, n.y + n.h / 2]; });
+  await drag('#ps-gantt_summary', { dp: mid }); await wait(300); await clean();
+  // フェーズの帯（フェーズの列）をクリックして選ぶ → 下のハンドルを資材搬入の行までドラッグ
+  const phEl = 'rect[width="6"][height="5"][fill="#2563eb"]';
+  // フェーズの列の縦の帯（名前の文字が縦に書かれている所）の中心
+  const spine = (nm) => ev((nm) => { const t = [...document.querySelectorAll('#g-gantt-left text')].find(t => t.textContent === nm && t.getBoundingClientRect().height > t.getBoundingClientRect().width); const r = t.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }, nm);
+  const phSpine = await spine('フェーズ');
+  await click(phSpine); await wait(400);
+  await away();
+  const top2 = await ev(() => { const a = S.nodes.find(x => x.text === '仮設・養生'), b = S.nodes.find(x => x.text === '既存内装の撤去'); const ctm = document.getElementById('diagram-svg').getScreenCTM(); const q0 = new DOMPoint(0, a.y - 30).matrixTransform(ctm), q1 = new DOMPoint(0, b.y + b.h + 10).matrixTransform(ctm); return [q0.y, q1.y]; });
+  const leftBox = async () => { const r = await box('#diagram-svg'); return { c: [Math.max(r.x, 196), top2[0], 660, top2[1] - top2[0]] }; };
+  await shot('m_gantt_phase_1', { clip: await leftBox(), pad: 0, anno: [{ box: { sel: phEl, i: 1 }, n: 1, at: 'r', out: true, pad: 3 }] });
+  const hb = await box({ sel: phEl, i: 1 });
+  const tgt = await ev(() => { const n = S.nodes.find(x => x.text === '資材搬入'); const ctm = document.getElementById('diagram-svg').getScreenCTM(); return new DOMPoint(0, n.y + n.h - 2).matrixTransform(ctm).y; });
+  await page.mouse.move(hb.x + hb.w / 2, hb.y + hb.h / 2, { steps: 4 }); await page.mouse.down();
+  await page.mouse.move(hb.x + hb.w / 2, tgt, { steps: 10 }); await wait(150);
+  await page.mouse.up(); await wait(300); await clean();
+  await click(await spine('フェーズ')); await wait(400); await away();
+  await shot('m_gantt_phase_2', { clip: await leftBox(), pad: 0 });
+  // フェーズをダブルクリック → 名前と色
+  await dblclick(await spine('フェーズ')); await wait(400);
+  await typeIn('#gm-name', '準備工事');
+  await click({ sel: '#gm-colors .gm-swatch', i: 0 });
+  await shot('m_gantt_06_phase', {
+    clip: '#gantt-modal-box', pad: 8,
+    anno: [{ box: '#gm-name', n: 1, at: 'l', out: true, pad: 2 }, { box: '#gm-colors', n: 2, at: 'l', out: true, pad: 2 }],
+  });
+  await page.click('#gantt-modal-footer .btn-primary'); await wait(300); await clean();
+  // 残りのフェーズ（同じ操作で作ったものと同じ結果）
+  await ev(() => { const p = S.nodes.find(n => n.type === 'gantt_summary'); p.color = '#0e7490'; snap(); });
+  await putTasks(T);
+  // 7. 依存関係: C → 既存内装の撤去 → 廃材の搬出 → 種類のメニュー
+  await page.keyboard.press('c'); await wait(150);
+  await click({ node: '既存内装の撤去' }); await wait(200);
+  await click({ node: '廃材の搬出' }); await wait(300);
+  const dbx = await ev(() => { const a = S.nodes.find(x => x.text === '既存内装の撤去'), b = S.nodes.find(x => x.text === '廃材の搬出'); return [Math.min(a.x, b.x) - 40, a.y - 40, Math.max(a.x + a.w, b.x + b.w) - Math.min(a.x, b.x) + 120, b.y + b.h - a.y + 60]; });
+  await ev(() => { document.getElementById('hint').style.display = 'none'; });
+  await shot('m_gantt_07_dep', { clip: [{ d: dbx }, '#lane-choice'], pad: 8, anno: [{ box: { sel: '#lane-choice button', i: 1 }, n: 1, at: 'r', out: true, pad: 1 }] });
+  await page.click('#lane-choice button:nth-of-type(2)'); await wait(300);
+  await page.keyboard.press('v'); await wait(100);
+  await ev(() => {
+    const id = (t) => S.nodes.find(x => x.text === t).id;
+    [['仮設・養生', '資材搬入'], ['資材搬入', '既存内装の撤去'], ['軽量鉄骨下地', 'ボード張り'], ['ボード張り', '塗装・床仕上げ'], ['塗装・床仕上げ', '完了検査']].forEach(([a, b]) => addEdge(id(a), id(b), { depType: 'FS', noSnap: true }));
+    S.sel = []; snap(); render(); markSaved();
+  });
+  // 8. 見出し欄: 見出しをダブルクリック → 工事場所・発注者・施工者・工期・担当
+  await ev(() => openGanttHeadEditor('ghm-rv-0')); await wait(400);
+  const vals = ['東京都○○区○○ 1-2-3', '株式会社○○物流', '○○建設株式会社', '2026/11/02〜2026/12/25', '山田 太郎', '第1版'];
+  for (let i = 0; i < vals.length; i++) await typeIn('#ghm-rv-' + i, vals[i]);
+  await ev(() => { const s = S.gantt.header.approval; s.show = true; if (s.slots) { s.slots[0].name = '部長'; s.slots[1].name = '課長'; s.slots[2].name = '山田'; } });
+  await page.click('#gantt-head-modal .pri'); await wait(400); await clean(); await away();
+  // 完成図（見出し欄の右端の承認欄・凡例まで入るように画面を広げる）
+  await B.setSize(1900, 1500); await wait(300);
+  await ev(() => { ganttFit(); }); await wait(300);
+  await ev(() => { S.sel = []; hint(''); render(); markSaved(); }); await page.mouse.move(5, 1495);
+  await shot('m_gantt_done', { clip: await chartBox(), pad: 0 });
+  await B.setSize(VW, VH); await wait(300);
+  await ev(() => { S.gantt.colWidth = 22; render(); }); await wait(200);
+  const saved = await ev(() => JSON.stringify({ nodes: S.nodes, edges: S.edges, gantt: S.gantt }));
+  const reset = () => ev((j) => { const o = JSON.parse(j); S.nodes = o.nodes; S.edges = o.edges; S.gantt = o.gantt; S.sel = []; S.printFitTall = null; S.pbPreview = false; snap(); render(); markSaved(); }, saved);
+
+  // 6.10 依存関係の4種類
+  await ev(() => {
+    S.nodes = []; S.edges = [];
+    const g = S.gantt; g.header.show = false; g.legend.show = false; g.startDate = '2026-11-02'; g.endDate = '2026-11-20'; g.colWidth = 26;
+    const add = (row, text, s, e) => { const n = { id: uid(), type: 'gantt_task', row, text, startDate: s, endDate: e, progress: 0, desc: '', assignee: '' }; S.nodes.push(n); return n; };
+    const pairs = [['FS', '2026-11-02', '2026-11-05', '2026-11-06', '2026-11-10'], ['SS', '2026-11-04', '2026-11-09', '2026-11-04', '2026-11-11'], ['FF', '2026-11-05', '2026-11-12', '2026-11-09', '2026-11-12'], ['SF', '2026-11-12', '2026-11-16', '2026-11-05', '2026-11-11']];
+    pairs.forEach(([k, a0, a1, b0, b1], i) => { const a = add(i * 2, k + ' 前のタスク', a0, a1), b = add(i * 2 + 1, k + ' 後のタスク', b0, b1); addEdge(a.id, b.id, { depType: k, noSnap: true }); });
+    S.sel = []; snap(); render(); markSaved();
+  });
+  await away();
+  await shot('m_gantt_deps', { clip: await chartBox({ w: 900 }), pad: 0 });
+  // 6.12 見出しの編集（凡例の部分・工種の色を1つ足したところ）
+  await reset();
+  await ev(() => openGanttHeadEditor()); await wait(300);
+  await ev(() => { document.activeElement.blur(); ganttLegendAddExtra(); const ex = S.gantt.legend.extra[0]; ex.label = '協力会社の作業'; ex.color = '#fde68a'; ex.stroke = '#fde68a'; ganttHeadDlgRefresh(); }); await wait(200);
+  await ev(() => { const el = document.querySelector('#ghm-body .ghm-sub'); el.scrollIntoView({ block: 'start' }); }); await wait(150);
+  await shot('m_gantt_legend', {
+    clip: [{ sel: '#ghm-body .ghm-inline', i: 1 }, { sel: '#ghm-body .ghm-add', i: 1 }], pad: 8,
+    anno: [{ box: { sel: '#ghm-body .ghm-color', i: 0 }, n: 1, at: 'l', out: true, pad: 2 }, { box: { sel: '#ghm-body .ghm-add', i: 1 }, n: 2, at: 'r', out: true, pad: 2 }],
+  });
+  await ev(() => closeGanttHeadEditor(false)); await wait(200);
+  // 6.13 目盛り（週・月）
+  for (const sc of ['week', 'month']) {
+    await reset();
+    await ev(() => { S.gantt.header.show = false; render(); });
+    await setVal('#gantt-scale-sb', sc); await wait(300); await clean(); await away();
+    const b = await chartBox(); b.c[3] = Math.min(b.c[3], 330);
+    await shot('m_gantt_scale_' + sc, { clip: b, pad: 0 });
+  }
+  // 6.16 印刷: ページ数 縦2 ＋ 改ページ位置
+  await reset();
+  await B.setSize(VW, 1500); await wait(300);
+  await ev(() => { S.gantt.colWidth = 16; render(); });   // 横に短い（用紙の幅に合わせると縦に長い）工程表＝A4 横で 2 ページ
+  await setVal('#print-orient', 'landscape'); await wait(200);   // A4 横＝縦に長い工程表が 2 ページに分かれる
+  await typeIn('#print-fit-tall', '2'); await wait(200);
+  await clickSel('#btn-pagebreak'); await wait(300); await clean(); await page.mouse.move(5, 1495); await ev(() => hint(''));
+  await shot('m_gantt_print', { clip: await chartBox({ w: 1000 }), pad: 0, anno: [{ box: { sel: '#g-pagebreak text', i: 0 }, n: 1, at: 'r', out: true, pad: 3 }] });
+  await B.setSize(VW, VH); await wait(300);
+  await clickSel('#btn-pagebreak'); await ev(() => { const el = document.getElementById('print-fit-tall'); el.value = ''; onPrintFitChange(); });
+  await setVal('#print-orient', 'portrait');
+  // 6.17 Mermaid から作る
+  await ev(() => openText2Diagram()); await wait(300);
+  await ev(() => {
+    const f = document.getElementById('t2d-format'); f.value = 'mermaid-gantt'; f.dispatchEvent(new Event('change'));
+    const ta = document.getElementById('t2d-input');
+    ta.value = 'gantt\n  section 準備工事\n    仮設・養生   :a1, 2026-11-02, 5d\n    資材搬入     :a2, after a1, 2d\n  section 解体工事\n    既存内装の撤去 :b1, after a2, 7d\n    廃材の搬出   :b2, 2026-11-16, 5d\n  section 検査\n    完了検査     :milestone, m1, 2026-11-27, 0d';
+    ta.dispatchEvent(new Event('input'));
+  });
+  await wait(200);
+  await shot('m_gantt_mmd_1', { clip: '#t2d-modal > div:nth-child(2)', pad: 4 });
+  await page.keyboard.down('Control'); await page.keyboard.press('Enter'); await page.keyboard.up('Control');
+  await wait(600);
+  await ev(() => { try { closeText2Diagram(); } catch (e) { } });
+  await ev(() => { S.gantt.colWidth = 26; S.gantt.header.show = false; S.gantt.legend.show = false; render(); });
+  await clean(); await away();
+  await shot('m_gantt_mmd_2', { clip: await chartBox({ w: 1000 }), pad: 0 });
 };
 
 // ---------- 第10章 マインドマップ ----------
