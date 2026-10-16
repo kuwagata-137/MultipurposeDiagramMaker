@@ -125,6 +125,8 @@ const D = (() => {
       case 'br': return [new Paragraph({ children: [new PageBreak()] })];
       case 'sp': return [sp(b.n)];
       case 'h': {
+        // 4 段目＝番号なしの小見出し（見出しスタイルを使わない＝目次・ナビゲーションに出さない）
+        if (b.l === 4) return [new Paragraph({ keepNext: true, spacing: { before: 160, after: 60 }, children: [new TextRun({ text: '■ ' + b.text, font: FONT, size: 22, bold: true, color: '404040' })] })];
         const sizes = { 1: 32, 2: 28, 3: 24 }, colors = { 1: '1F4E79', 2: '2E75B6', 3: '404040' };
         const hl = b.l === 1 ? HeadingLevel.HEADING_1 : b.l === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3;
         return [new Paragraph({ heading: hl, keepNext: true, pageBreakBefore: !!b.o.newPage, spacing: { before: b.l === 1 ? 360 : 240, after: 120 }, children: [new TextRun({ text: b.text, font: FONT, size: sizes[b.l], bold: true, color: colors[b.l] })] })];
@@ -292,6 +294,7 @@ h1{font-size:16pt;color:#1F4E79;margin:18pt 0 6pt;break-after:avoid}
 h1:not(.toc){break-before:auto}
 h2{font-size:14pt;color:#2E75B6;margin:12pt 0 6pt;break-after:avoid}
 h3{font-size:12pt;color:#404040;margin:10pt 0 4pt;break-after:avoid}
+h4{font-size:11pt;color:#404040;margin:8pt 0 3pt;break-after:avoid}h4::before{content:'■ '}
 .np{break-before:page}
 p{margin:4pt 0}
 .note{color:#555;font-size:10pt}
