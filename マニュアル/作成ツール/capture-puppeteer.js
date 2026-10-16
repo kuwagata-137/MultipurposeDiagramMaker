@@ -1931,6 +1931,168 @@ sections.m10m = async () => {
   await shot('btn_mindtext_on', { clip: '#btn-mindtext', pad: 2 });
 };
 
+// ---------- 第7章 マインドマップ（作例「会議の論点整理」と機能ごとの画面）----------
+// 操作は実際の UI（Tab／Enter のキー・パレットのクリック配置・ダブルクリックの編集・リザーブの入力とドラッグ・
+// 属性のボタン・強調表示の欄・一覧のクリック・整列・レベル・フォーカス）で行う。同じ操作のくり返しは ev で入れる。
+sections.mind = async () => {
+  const away = async () => { await page.mouse.move(5, 1240); await ev(() => hint('')); };
+  const nodeId = (t) => ev((t) => S.nodes.find(n => n.text === t).id, t);
+  // 見えているノード全体の範囲（図の座標）＋余白
+  const allBox = (m = 30) => ev((m) => {
+    const hid = mindHiddenSet(); const ns = S.nodes.filter(n => isMindShape(n.type) && !hid.has(n.id));
+    const x0 = Math.min(...ns.map(n => n.x)), y0 = Math.min(...ns.map(n => n.y)), x1 = Math.max(...ns.map(n => n.x + n.w)), y1 = Math.max(...ns.map(n => n.y + n.h));
+    return { d: [x0 - m, y0 - m, x1 - x0 + m * 2, y1 - y0 + m * 2] };
+  }, m);
+  // 見えるようにスクロールしてから撮る
+  const scrollTo = (b) => page.evaluate((b) => { const w = document.getElementById('canvas-wrap'); w.scrollLeft = Math.max(0, b.d[0] * zoomLevel - 40); w.scrollTop = Math.max(0, b.d[1] * zoomLevel - 40); }, b);
+  const shotMap = async (name, o = {}) => { const b = await allBox(o.m); await scrollTo(b); await wait(150); await shot(name, Object.assign({ clip: b, pad: 0, within: '#canvas-wrap' }, o)); };
+  // 選んだノードの子を Tab で足し、名前を打つ（Enter で確定）
+  const tabChild = async (text) => { await page.keyboard.press('Tab'); await wait(300); await page.keyboard.type(text); await page.keyboard.press('Enter'); await wait(250); };
+  const enterSib = async (text) => { await page.keyboard.press('Enter'); await wait(300); await page.keyboard.type(text); await page.keyboard.press('Enter'); await wait(250); };
+  // 選ぶ前にノードを画面の中ほどへスクロールする（画面の外のノードは押せない）
+  const sel = async (t) => {
+    await page.evaluate((t) => { const n = S.nodes.find(x => x.text === t); const w = document.getElementById('canvas-wrap'); w.scrollLeft = Math.max(0, (n.x + n.w / 2) * zoomLevel - w.clientWidth / 2); w.scrollTop = Math.max(0, (n.y + n.h / 2) * zoomLevel - w.clientHeight / 2); }, t);
+    await wait(150); await click({ node: t }); await wait(350);
+  };
+  // パレットのシェイプをクリックで選び、図の (dx,dy) をクリック → 選んでいるノードの子 → ダブルクリックで名前
+  const palPut = async (type, dp, text) => {
+    await clickSel('#ps-' + type); await move({ dp }); await page.mouse.down(); await page.mouse.up(); await wait(300);
+    const id = await ev(() => S.nodes[S.nodes.length - 1].id);
+    await page.keyboard.press('Escape'); await wait(100);
+    await ev((id) => { const n = S.nodes.find(x => x.id === id); return n.text; }, id).then(async (cur) => {
+      await dblclick({ node: cur }); await wait(250);
+      await page.keyboard.down('Control'); await page.keyboard.press('a'); await page.keyboard.up('Control'); await page.keyboard.type(text); await page.keyboard.press('Enter'); await wait(250);
+    });
+  };
+
+  await open('mindmap', { size: [VW, 1250] });   // 放射状は上下に広がる＝縦に広い画面で撮る
+  await ev(() => { const el = document.getElementById('diagram-name'); el.value = '受付窓口の改善会議 論点整理'; onDiagramNameInput(el.value); markSaved(); });
+  // 1. 中心トピックをダブルクリックして会議名
+  await dblclick({ node: '中心トピック' }); await wait(300);
+  await page.keyboard.down('Control'); await page.keyboard.press('a'); await page.keyboard.up('Control');
+  await page.keyboard.type('受付窓口の改善会議');
+  await shotMap('m_mind_01_root', { m: 70 });
+  await page.keyboard.press('Enter'); await wait(250); await clean();
+  // 2. Tab で議題、Enter で同じ段の議題
+  await sel('受付窓口の改善会議');
+  await tabChild('待ち時間が長い');
+  await enterSib('記入漏れが多い');
+  await enterSib('案内が分かりにくい');
+  await clean(); await away();
+  await shotMap('m_mind_02_topics', { m: 40 });
+  // 3. 出た話をリザーブへ（Enter で追加）
+  await page.click('#mind-reserve-text');
+  for (const t of ['整理券機の費用は？', '高齢の来庁者への配慮', '他市の事例を調べる']) { await page.keyboard.type(t); await page.keyboard.press('Enter'); await wait(150); }
+  await page.mouse.click(5, 1240); await wait(150);
+  await shot('m_mind_03_reserve', { clip: [{ sel: '#right-sidebar .ph', i: 0 }, { sel: '#mind-reserve-list .mr-row', i: 2 }], pad: 6, anno: [{ box: '#mind-reserve-text', n: 1, at: 'l', out: true, pad: 2 }, { box: { sel: '#mind-reserve-list .mr-row > svg', i: 0 }, n: 2, at: 'l', out: true, pad: 2 }] });
+  // 4. 議題を選び、パレットの「対策」「補足情報」をクリック配置 → 名前
+  await sel('待ち時間が長い');
+  const spot = (t, dx, dy) => ev(([t, dx, dy]) => { const n = S.nodes.find(x => x.text === t); return [n.x + n.w / 2 + dx, n.y + n.h / 2 + dy]; }, [t, dx, dy]);
+  await palPut('mind_action', await spot('待ち時間が長い', 190, -40), '整理券を配る');
+  await sel('待ち時間が長い');
+  await palPut('mind_note', await spot('待ち時間が長い', 190, 45), '昼は30分待ち');
+  // リザーブの「整理券機の費用は？」を「整理券を配る」の上へドラッグ
+  const rsv = await box({ sel: '#mind-reserve-list .mr-row > svg', i: 0 });
+  const tgt = await pt({ node: '整理券を配る' });
+  await page.mouse.move(rsv.x + rsv.w / 2, rsv.y + rsv.h / 2, { steps: 4 }); await page.mouse.down();
+  await page.mouse.move(tgt[0] - 100, tgt[1], { steps: 8 }); await page.mouse.move(tgt[0], tgt[1], { steps: 6 }); await wait(150);
+  await page.mouse.up(); await wait(300); await clean();
+  await ev(() => { S.sel = []; render(); }); await away();
+  await shotMap('m_mind_04_add', { m: 30 });
+  // 残りの対策・補足情報（同じ操作で入れたものと同じ結果）
+  await ev(() => {
+    const add = (pt, text, type) => { const p = S.nodes.find(n => n.text === pt); const d = SD[type]; const n = { id: uid(), type, text, x: p.x, y: p.y, w: d.w, h: d.h }; S.nodes.push(n); S.edges.push({ id: uid(), from: p.id, to: n.id, label: '', fromLabel: '', toLabel: '', fromLid: null, toLid: null }); };
+    add('記入漏れが多い', '必須欄に色を付ける', 'mind_action');
+    add('記入漏れが多い', '記入例を窓口に置く', 'mind_action');
+    add('案内が分かりにくい', '案内板を作り直す', 'mind_action');
+    add('案内が分かりにくい', '苦情は月に10件', 'mind_note');
+    mindLayout(); S.sel = []; render(); markSaved();
+  });
+  // 5. 状態を付ける（選んで「選択ノードの属性」のボタン）
+  const setAttr = async (t, key, v) => { await sel(t); await click({ sel: `.mind-seg[data-key="${key}"] button[data-v="${v}"]` }); await wait(200); };
+  await setAttr('整理券を配る', 'status', 'agreed');
+  await setAttr('必須欄に色を付ける', 'status', 'agreed');
+  await setAttr('記入例を窓口に置く', 'status', 'open');
+  await setAttr('案内板を作り直す', 'status', 'objection');
+  await setAttr('整理券機の費用は？', 'status', 'open');
+  await sel('案内板を作り直す'); await away();
+  await ev(() => document.getElementById('mind-settings').scrollIntoView({ block: 'start' }));
+  await shot('m_mind_05_attr', {
+    clip: [{ sel: '#mind-settings .ph', i: 1 }, { sel: '#mind-settings .gset-body', i: 1 }], pad: 6,
+    anno: [{ box: '.mind-seg[data-key="status"]', n: 1, at: 'r', out: true, pad: 2 }],
+  });
+  // 6. 未決・反対一覧
+  await ev(() => document.getElementById('mind-issue-list').scrollIntoView({ block: 'end' }));
+  await shot('m_mind_06_issues', { clip: [{ sel: '#mind-settings .ph', i: 3 }, '#mind-issue-list'], pad: 6 });
+  // 7. 重要度・工数 → 重要度「高」で絞り込み
+  await setAttr('待ち時間が長い', 'importance', 'high');
+  await setAttr('記入漏れが多い', 'importance', 'mid');
+  await setAttr('整理券を配る', 'effort', 'mid');
+  await setAttr('案内板を作り直す', 'effort', 'high');
+  await ev(() => { S.sel = []; render(); markSaved(); });
+  await ev(() => { const a = document.getElementById('mind-filter-attr'); a.value = 'importance'; a.dispatchEvent(new Event('change')); });
+  await ev(() => { const v = document.getElementById('mind-filter-val'); v.value = 'high'; v.dispatchEvent(new Event('change')); });
+  await wait(200); await away();
+  await shotMap('m_mind_07_filter', { m: 30 });
+  await ev(() => { const a = document.getElementById('mind-filter-attr'); a.value = ''; a.dispatchEvent(new Event('change')); });
+  // 8. ⊞ 整列 → ツリー
+  await clickSel('.mind-layout[data-ml="tree"]'); await wait(400); await clean(); await away();
+  await shotMap('m_mind_08_tree', { m: 30 });
+  // 9. レベル 2 → テキスト出力のダイアログ
+  await clickSel('#mind-tools .rrow:nth-child(2) button:nth-of-type(2)'); await wait(300); await clean(); await away();
+  await shotMap('m_mind_09_level', { m: 30, anno: [{ box: { sel: '#mind-tools .rrow:nth-child(2) button', i: 1 }, n: 1, at: 'b', out: true, pad: 2 }] });
+  await clickSel('#mind-tools .rrow:nth-child(2) button:nth-of-type(4)'); await wait(300); await clean();
+  await ev(() => openMindTextExport()); await wait(200);
+  await shot('m_mind_10_export', { clip: '#mindexp-modal > div:nth-child(2)', pad: 4 });
+  await ev(() => closeMindTextExport());
+  // 完成図（放射状）
+  await clickSel('.mind-layout[data-ml="radial"]'); await wait(400); await clean();
+  await ev(() => { S.sel = []; render(); markSaved(); }); await away();
+  await shotMap('m_mind_done', { m: 30 });
+  const saved = await ev(() => JSON.stringify({ nodes: S.nodes, edges: S.edges, ml: S.mindLayout, rs: S.mindReserve }));
+  const reset = () => ev((j) => { const o = JSON.parse(j); S.nodes = o.nodes; S.edges = o.edges; S.mindLayout = o.ml; S.mindReserve = o.rs; S.sel = []; mindFocusId = null; mindEmphasisOpen = false; document.getElementById('mind-emph-open').checked = false; updateMindToolbar(); renderMindReserve(); snap(); render(); markSaved(); }, saved);
+
+  // 7.6 付け替え（「記入例を窓口に置く」を「案内が分かりにくい」の上へドラッグ）
+  await reset();
+  {
+    const a = await pt({ node: '記入例を窓口に置く' }), b = await pt({ node: '案内が分かりにくい' });
+    await page.mouse.move(a[0], a[1], { steps: 4 }); await page.mouse.down();
+    await page.mouse.move((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, { steps: 8 }); await page.mouse.move(b[0], b[1] + 3, { steps: 8 }); await wait(200);
+    await shotMap('m_mind_reparent', { m: 40, anno: [{ cursor: [b[0], b[1] + 3] }] });
+    await page.keyboard.press('Escape'); await page.mouse.move(a[0], a[1], { steps: 4 }); await page.mouse.up(); await wait(300);
+  }
+  // 7.9 畳む（＋N）とフォーカス
+  await reset();
+  await sel('記入漏れが多い'); await page.keyboard.press(' '); await wait(300); await clean();
+  await ev(() => { S.sel = []; render(); }); await away();
+  await shotMap('m_mind_collapse', { m: 30, anno: [{ box: { sel: '#g-nodes text', text: '+2' }, n: 1, at: 'r', out: true, pad: 6 }] });
+  await reset();
+  await sel('待ち時間が長い'); await clickSel('#btn-mind-focus'); await wait(300); await away();
+  await shotMap('m_mind_focus', { m: 30 });
+  await clickSel('#btn-mind-focus'); await wait(200);
+  // 7.11 未決・反対のみ強調
+  await reset();
+  await page.click('#mind-emph-open'); await wait(300); await away();
+  await shotMap('m_mind_emph', { m: 30 });
+  await page.click('#mind-emph-open'); await wait(200);
+  // 7.14 アウトライン（箇条書き）から作る
+  await ev(() => openText2Diagram()); await wait(300);
+  await ev(() => {
+    const f = document.getElementById('t2d-format'); f.value = 'outline-mindmap'; f.dispatchEvent(new Event('change'));
+    const ta = document.getElementById('t2d-input');
+    ta.value = '受付窓口の改善会議\n  待ち時間が長い\n    整理券を配る\n    昼は30分待ち\n  記入漏れが多い\n    必須欄に色を付ける\n  案内が分かりにくい\n    案内板を作り直す';
+    ta.dispatchEvent(new Event('input'));
+  });
+  await wait(200);
+  await shot('m_mind_outline_1', { clip: '#t2d-modal > div:nth-child(2)', pad: 4 });
+  await page.keyboard.down('Control'); await page.keyboard.press('Enter'); await page.keyboard.up('Control');
+  await wait(600);
+  await ev(() => { try { closeText2Diagram(); } catch (e) { } });
+  await clean(); await away();
+  await shotMap('m_mind_outline_2', { m: 30 });
+  void nodeId;
+};
+
 // ---------- 第11章 保存とエクスポート ----------
 sections.m11 = async () => {
   // 11.1 上書き保存の流れ（このアプリのフローチャートで作図）
