@@ -11253,7 +11253,9 @@ function svgMD(ev){
     const pt=svgPt(ev);
     marquee={sx:pt.x,sy:pt.y,moved:false};
     edgeAutoScroll.start();   // v8.23: 画面端で自動スクロール
-    S.sel=[]; render();
+    // v8.32追補（B-7）: 何も選んでいないときは描き直さない。押した瞬間の render() が押した所の背景（g-lanes の rect 等）を
+    //   作り直すため、離したときの相手が別の要素になって click・dblclick が起きず、余白のダブルクリックで「プロセス」が置かれなかった
+    if(S.sel.length){ S.sel=[]; render(); }
     return;
   }
   S.sel=[]; render();
