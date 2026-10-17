@@ -1115,7 +1115,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   </div>
 </div>
 
-<!-- 追補(v7.05): 樹状図の箱 編集ダイアログ（ダブルクリック/◫ボタンで開く。行・列はボタンで追加） -->
+<!-- 追補(v7.05): 樹状図の箱 編集ダイアログ（ダブルクリックで開く。行・列はボタンで追加） -->
 <div id="org-modal">
   <div id="org-modal-bg" onclick="closeOrgModal()"></div>
   <div id="org-modal-box">
@@ -1774,6 +1774,16 @@ function endpointLabelPos(px,py,side){
 function normalizeGroupBoxes(){
   S.nodes.forEach(n=>{ if(n.type==='group_box') clampGroupCuts(n); });
 }
+// v8.32追補（B-2）: マインドマップ・ガントに紛れ込んだ、その図種では描かれないシェイプを開いたときに取り除く
+//   （余白のダブルクリックで足された見えない「プロセス」(rect) が保存ファイルにも入っていた）。読み込みの markSaved の前に呼ぶ＝
+//   開いただけでは未保存にならない。ほかの図種は何もしない
+function pruneStrayNodes(){
+  const keep=S.diagramType==='mindmap'?(t=>isMindShape(t)):S.diagramType==='gantt'?(t=>typeof t==='string'&&t.startsWith('gantt_')):null;
+  if(!keep) return;
+  const drop=new Set(S.nodes.filter(n=>!keep(n.type)).map(n=>n.id)); if(!drop.size) return;
+  S.nodes=S.nodes.filter(n=>!drop.has(n.id));
+  S.edges=S.edges.filter(e=>!drop.has(e.from)&&!drop.has(e.to));
+}
 function migrateOrgSections(){
   S.nodes.forEach(n=>{
     if(n.type!=='org_node'||!n.sections)return;
@@ -2259,7 +2269,10 @@ const EDGE_LABEL_MAX_W=140;
 //   帯の高さは文字サイズに追随（max(22, fs×1.5)＝16px→24px・12px指定の旧図は従来どおり22px）
 const GROUP_FONT=16;
 function isGroupType(t){ return t==='group_box'||t==='org_group'; }
-function defaultFontSize(n){ return (n&&isGroupType(n.type))?GROUP_FONT:AUTO_FONT; }
+function defaultFontSize(n){   // v8.32追補（B-1）: マインドマップは種別＋重要度で決まる今の表示の大きさ（数値欄に実際の値を出す）
+  if(n&&isMindShape(n.type)) return mindBaseFont(n);
+  return (n&&isGroupType(n.type))?GROUP_FONT:AUTO_FONT;
+}
 function nodeFontSize(n){ const v=n&&n.fontSize; return (typeof v==='number'&&v>0)?v:defaultFontSize(n); }
 function groupTitleH(n){ return Math.max(22,Math.round(nodeFontSize(n)*1.5)); }
 function lineH(fs){ return Math.round(fs*1.25); }
@@ -2890,6 +2903,7 @@ function init(){
     S.stepNums=!!st.stepNums;   // v8.01: 番号バッジ表示状態
     migrateOrgSections();         // v7.02: 旧2段(sub)→ミニ表へ自動移行（見た目不変）
     normalizeGroupBoxes();        // v8.26: グループ枠の幾何を整数に（端数幅の枠の細い突起を是正）
+    pruneStrayNodes();            // v8.32追補（B-2）: マインドマップ・ガントの見えないシェイプを取り除く
     ganttMigrateColLabels();      // 微修正(v8.00据置): 旧データのタスク別項目名→列ラベルへ集約
     S_diagramName=st.diagramName||'';
     const ni=document.getElementById('diagram-name');
@@ -7879,9 +7893,15 @@ function mindCreateRoot(){
   const n={id:uid(),type:'mind_root',text:SD.mind_root.text,x:725,y:476,w:SD.mind_root.w,h:SD.mind_root.h};
   S.nodes.push(n); S.sel=[n.id];
 }
-function mindNodeFont(n){   // v8.05: 種別＋重要度で文字サイズを決定（補足情報は小さめ・重要度で三段階）
+function mindBaseFont(n){   // v8.05: 種別＋重要度で文字サイズを決定（補足情報は小さめ・重要度で三段階）
   const base=n.type==='mind_root'?15:(n.type==='mind_note'?11:12);
   return n.type==='mind_root'?base:base+mindImpSize(n).f;
+}
+// v8.32追補（B-1）: 文字サイズを指定したノードはその値で描く（従来は n.fontSize を読まず、数値欄で変えても見た目が変わらなかった）。
+//   指定した値に重要度の増減は足さない＝数値欄の値＝表示の大きさ（ユーザー決定 2026-10-17）。シェイプの余白・高さの倍率は重要度どおり
+function mindNodeFont(n){
+  const v=n.fontSize;
+  return (typeof v==='number'&&v>0)?v:mindBaseFont(n);
 }
 // v8.10: 上限 MIND_W_MAX を超えるぶんは自動で折り返して縦へ伸ばす（従来は横へ伸び続けた）。
 //   折り返したあとは実際に一番長くなった行に合わせて幅を詰めるので、左右が間延びしない。
@@ -11213,7 +11233,9 @@ function svgMD(ev){
     if(mainPos>hdr){
       // v8.05: 何か選択中に余白をクリックしたら、まず選択解除だけ行う（この1クリックでは配置しない）。
       //   マインドマップは「選択＝次の配置の親」(v8.04追補②)のため対象外＝選択を保ったまま配置する。
-      if(S.sel.length&&S.diagramType!=='mindmap'){S.sel=[];render();return}
+      //   v8.32追補（B-4）: ガントのフェーズも対象外＝選んだタスクを最初の中身にしてフェーズを作る（ganttPlace）。従来はクリック配置だと
+      //   1 回目で選択が外れ、2 回目でいちばん下のタスクのフェーズになっていた（ドラッグで置いたときだけ選んだタスクが使われた）
+      if(S.sel.length&&S.diagramType!=='mindmap'&&!(S.diagramType==='gantt'&&activePal==='gantt_summary')){S.sel=[];render();return}
       // v8.29: 配置は左ボタンを【離した位置】で行う（palPlaceState＝保留・確定は document の mouseup）。従来は押した瞬間に
       //   置いていたため、パレット選択中に左右同時押しでハンドツールへ切り替えようとすると、左を押した時点でシェイプが
       //   置かれていた（ユーザー報告 2026-09-15）。同時押しの切替（chordToggleMode）・Esc・右クリックは保留を破棄する＝置かれない。
@@ -11231,7 +11253,9 @@ function svgMD(ev){
     const pt=svgPt(ev);
     marquee={sx:pt.x,sy:pt.y,moved:false};
     edgeAutoScroll.start();   // v8.23: 画面端で自動スクロール
-    S.sel=[]; render();
+    // v8.32追補（B-7）: 何も選んでいないときは描き直さない。押した瞬間の render() が押した所の背景（g-lanes の rect 等）を
+    //   作り直すため、離したときの相手が別の要素になって click・dblclick が起きず、余白のダブルクリックで「プロセス」が置かれなかった
+    if(S.sel.length){ S.sel=[]; render(); }
     return;
   }
   S.sel=[]; render();
@@ -11239,6 +11263,8 @@ function svgMD(ev){
 function svgDbl(ev){
   if(svgEditorActive())return;   // v8.10: 編集中の余白ダブルクリックで新しい四角を作らない
   if(gapState)return;            // v8.25: 隙間挿入中の連続クリックで四角を作らない
+  // v8.32追補（B-2）: マインドマップ・ガントは四角（rect）を描かない＝余白のダブルクリックで見えない「プロセス」が増え、保存にも入っていた
+  if(S.diagramType==='mindmap'||S.diagramType==='gantt')return;
   const pt=svgPt(ev);
   const hdr=headerSize();
   const mainPos=isV()?pt.y:pt.x;
@@ -11578,7 +11604,9 @@ function pasteAt(px,py){
   const pc=pasteClip; if(!pc||!pc.nodes.length)return;
   const hi=S.hi, before=S.hist[hi];
   try{
+    const mindParent=S.diagramType==='mindmap'?mindPasteParent(px,py):null;   // v8.32追補（B-3）: 貼る前に決める（貼ったノード自身を拾わない）
     const ids=CLIP_SAME_DOC_TYPES.includes(S.diagramType)?pasteNodesKeep(pc,px,py):pasteNodesPlaced(pc,px,py);
+    if(mindParent) mindAttachPasted(pc,ids,mindParent);
     S.sel=ids; snap(); render();
     hint(`${ids.length}件のシェイプを貼り付けました`);
   }catch(err){
@@ -11586,6 +11614,27 @@ function pasteAt(px,py){
     S.hist=S.hist.slice(0,hi+1); S.hi=hi; if(before) restore(before);
     hint('貼り付けに失敗しました（貼り付ける前に戻しました）: '+((err&&err.message)||err));
   }
+}
+// v8.32追補（B-3）: マインドマップの貼り付け＝貼ったノードを親に付ける。従来は親子の線が無いノードになり、どの枝にも属さず
+//   整列でも位置が決まらなかった。親の決め方はリザーブ（mindReservePlace）と同じ＝クリックした所のノード → 選んでいるノード →
+//   中心（ユーザー決定 2026-10-17）
+function mindPasteParent(px,py){
+  let root=mindRoot();
+  if(!root){ mindCreateRoot(); root=mindRoot(); }
+  const tgt=mindReserveTargetAt(px,py);
+  const selNode=S.sel.map(id=>S.nodes.find(n=>n.id===id)).find(n=>n&&isMindShape(n.type));
+  return tgt||selNode||root;
+}
+//   一緒にコピーしたノードどうしの親子はそのまま（pasteNodesKeep が線を作り直す）。貼ったものの中に親がいないノードだけを親に付ける。
+//   中心トピックをコピーしていたら「問題」として貼る（中心は 1 つだけ）。ids は pc.nodes と同じ順（pasteNodesKeep の戻り値）
+function mindAttachPasted(pc,ids,parent){
+  const set=new Set(ids), hasParent=new Set(S.edges.filter(e=>set.has(e.from)&&set.has(e.to)).map(e=>e.to));
+  ids.forEach(id=>{
+    const n=S.nodes.find(x=>x.id===id); if(!n) return;
+    if(n.type==='mind_root') n.type='mind_topic';
+    if(!isMindShape(n.type)||hasParent.has(id)) return;
+    S.edges.push({id:uid(),from:parent.id,to:id,label:'',fromLabel:'',toLabel:'',fromLid:null,toLid:null});
+  });
 }
 // ガント・マインドマップ・シーケンス＝従来の処理のまま（位置をずらして ID を振り直すだけ）
 function pasteNodesKeep(pc,px,py){
@@ -15897,6 +15946,7 @@ function importStateFromHtml(html,asked){
   S.stepNums=!!st.stepNums;
   migrateOrgSections();         // v7.02: 旧2段(sub)→ミニ表へ自動移行（見た目不変）
   normalizeGroupBoxes();        // v8.26: グループ枠の幾何を整数に（端数幅の枠の細い突起を是正）
+  pruneStrayNodes();            // v8.32追補（B-2）: マインドマップ・ガントの見えないシェイプを取り除く
   ganttMigrateColLabels();      // 微修正(v8.00据置): 旧データのタスク別項目名→列ラベルへ集約
   const _dropped=migrateLegacyEdgeRouting(st.appVer);   // v8.14: 旧版の経路指定を落として今の仕組みで引き直す（v8.31追補⑤: v8.13 以前のファイルだけ）
   S.sel=[]; S.conn=null;
@@ -17754,7 +17804,7 @@ function orgAddSubordinate(pid){
   orgRelayoutChildren(pid);
   // v7.03追補: 選択は上司側に維持＝＋ボタンを続けて押してテンポよく部下を追加できる（ユーザー要望）
   S.sel=[pid]; clearGuides(); snap(); render();
-  hint('部下を追加しました（＋を続けて押すと連続追加）。文字はダブルクリック・表は◫ボタンで編集');
+  hint('部下を追加しました（＋を続けて押すと連続追加）。文字と表はダブルクリックで編集');
 }
 // v7.03: 指定した親の配下を均等に再配置＝各子のサブツリー（実占有範囲ごと平行移動）を
 //   兄弟順（現在の並び）のまま横(縦)に等間隔で並べ、全体を親の中心に合わせる。行(列)も揃える。
