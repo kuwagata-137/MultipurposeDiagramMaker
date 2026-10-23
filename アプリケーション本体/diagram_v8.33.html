@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MultipurposeDiagramMaker v8.32</title>
+<title>MultipurposeDiagramMaker v8.33</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;display:flex;flex-direction:column;height:100vh;overflow:hidden;user-select:none}
@@ -544,7 +544,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 //# sourceMappingURL=exceljs.bare.min.js.map</script>
 
 <div id="app-title-bar">
-  <span id="app-title-text">MultipurposeDiagramMaker v8.32</span>
+  <span id="app-title-text">MultipurposeDiagramMaker v8.33</span>
   <span class="diagram-type-label" id="dtype-label" onclick="toggleDTypeMenu(event)"></span>
   <!-- v8.12: 図の名称。図種バッジのすぐ右へ移設（旧＝左サイドバー最上段でラベルも無く埋もれていた） -->
   <input id="diagram-name" type="text" placeholder="図の名称を入力" aria-label="図の名称" oninput="onDiagramNameInput(this.value)"/>
@@ -1413,7 +1413,7 @@ const LC=[
 const VIRTUAL_LANE={id:'__virtual__',name:'',bg:'#f8fafc',hd:'#e2e8f0',w:800};
 // v8.14: このアプリの版番号。保存データに入れておき、読み込んだファイルが古い版で
 //   作られたものかを判断する（古ければ接続線の経路を今の仕組みで引き直す）。
-const APP_VER='8.32';
+const APP_VER='8.33';
 
 // v8.18: 点線スタイル。省略可能な工程（条件により実施しない処理）を点線の枠・線で表す業務フロー記法のため、
 //   ノード n.dashed / エッジ ed.dashed（true のみ保持・実線はキー削除＝fontSize と同じ流儀）。
