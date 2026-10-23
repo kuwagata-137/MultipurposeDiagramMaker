@@ -6154,7 +6154,13 @@ function ganttColList(){ const g=S.gantt;
 function ganttColsTotalW(){ return ganttColList().reduce((a,c)=>a+(c.width||120),0); }
 // v8.33: 情報欄の行（全タスク・全列で共通）。無ければ従来の上段・下段＝['r3','r4']。足した行の id は 'ri'+uid
 //   （ユーザー要望 2026-10-23「情報欄で行を追加できるように」）。項目名は列ごとに col[行id+'Label']＝r3Label/r4Label と同じ形
-function ganttInfoRowIds(){ const r=S.gantt&&S.gantt.infoRows; return (Array.isArray(r)&&r.length)?r:['r3','r4']; }
+//   取り込んだファイルの値は id の形（r3・r4・ri＋数字）だけ通す＝編集画面の onclick・属性に入るので、
+//   形の違う値（細工したファイル）でスクリプトや __proto__ を紛れ込ませない。重なりも除く
+function ganttInfoRowIds(){
+  const r=S.gantt&&S.gantt.infoRows;
+  const ok=Array.isArray(r)?[...new Set(r.filter(x=>typeof x==='string'&&/^(r3|r4|ri\d+)$/.test(x)))]:[];
+  return ok.length?ok:['r3','r4'];
+}
 // v8.33: タスク名の行の項目名（全タスク共通・既定「タスク名」。「工事名」などに変えられる）
 function ganttNameLabel(){ const v=S.gantt&&S.gantt.nameLabel; return v==null?'タスク名':String(v); }
 function ganttDefLabel(colId,row){ return colId==='c0'?(row==='r3'?'概要':row==='r4'?'担当':''):''; }
@@ -6187,9 +6193,11 @@ function ganttMigrateColLabels(){ const g=S.gantt; if(!g||!Array.isArray(g.cols)
     for(const n of S.nodes){ const cc=n.cells&&n.cells[col.id]&&n.cells[col.id][row]; if(cc&&cc.l!=null&&String(cc.l).trim()!==''){ col[k]=cc.l; break; } } }); }); }
 // 既存呼び出し互換（n は無視＝列ラベルを返す）。
 function ganttCellLabel(n,colId,row){ return ganttColLabel(colId,row); }
-// v8.33: c0 の上段・下段だけ desc/assignee（従来どおり）。足した行は c0 も n.cells に入れる
-function ganttCellVal(n,colId,row){ if(colId==='c0'&&(row==='r3'||row==='r4')) return (row==='r3'?(n.desc||''):(n.assignee||'')); n.cells=n.cells||{}; const c=n.cells[colId]=n.cells[colId]||{}; const cell=c[row]=c[row]||{}; return cell.v||''; }
-function ganttSetCell(n,colId,row,label,val){ ganttSetColLabel(colId,row,label); if(colId==='c0'&&(row==='r3'||row==='r4')){ if(row==='r3') n.desc=val; else n.assignee=val; } else { n.cells=n.cells||{}; const c=n.cells[colId]=n.cells[colId]||{}; const cell=c[row]=c[row]||{}; cell.v=val; } }
+// v8.33: c0 の上段・下段だけ desc/assignee（従来どおり）。足した行は c0 も n.cells に入れる。
+//   列・行の id が __proto__ などなら読み書きしない（取り込んだファイルの値で Object の性質を書き換えさせない）
+const GANTT_BAD_KEY=new Set(['__proto__','constructor','prototype']);
+function ganttCellVal(n,colId,row){ if(colId==='c0'&&(row==='r3'||row==='r4')) return (row==='r3'?(n.desc||''):(n.assignee||'')); if(GANTT_BAD_KEY.has(colId)||GANTT_BAD_KEY.has(row)) return ''; n.cells=n.cells||{}; const c=n.cells[colId]=n.cells[colId]||{}; const cell=c[row]=c[row]||{}; return cell.v||''; }
+function ganttSetCell(n,colId,row,label,val){ if(GANTT_BAD_KEY.has(colId)||GANTT_BAD_KEY.has(row)) return; ganttSetColLabel(colId,row,label); if(colId==='c0'&&(row==='r3'||row==='r4')){ if(row==='r3') n.desc=val; else n.assignee=val; } else { n.cells=n.cells||{}; const c=n.cells[colId]=n.cells[colId]||{}; const cell=c[row]=c[row]||{}; cell.v=val; } }
 // セルの折返し行配列（本文のみ。空なら ['']）。
 //   v8.33: 本文は項目名の帯の右から（ganttBodyX）＝折り返し幅は列幅−本文の書き出し−右の余白 6px
 function ganttCellLines(n,col,row){ const val=ganttCellVal(n,col.id,row); if(!val||!String(val).trim()) return ['']; const bodyW=Math.max(24,(col.width||120)-ganttBodyX(col)-6); return wrapText(String(val),bodyW,11); }
@@ -6476,11 +6484,12 @@ function ganttBodyTop(){ return ganttHeadH()+(ganttWrapOn()?GANTT_BAND_LABEL_H:0
 //   そのフェーズの色ごと（塗りは追従の 0.80 と見本データの 0.82 が混じるので枠の色だけで束ねる）／それ以外＝塗りと枠の組ごと。
 //   名前に「予定（）」は付けない（ユーザー決定）＝フェーズ名、手で変えた色は入力した名前（未入力の間は色の名前）。並びは上の行から
 function ganttTaskColorGroups(){
-  const D=SD.gantt_task, lc=c=>String(c||'').toLowerCase(), phases={};
+  //   色は #16 進の形だけ使う（項目のキーが見出しの編集の onclick に入る＝取り込んだファイルの色の値でスクリプトを紛れ込ませない）
+  const D=SD.gantt_task, lc=c=>{ const s=String(c||'').toLowerCase(); return /^#[0-9a-f]{3,8}$/.test(s)?s:''; }, phases={};
   S.nodes.forEach(p=>{ if(p.type==='gantt_summary') phases[p.id]=p; });
   const groups=[], byKey={};
   S.nodes.filter(n=>n.type==='gantt_task').sort((a,b)=>(a.row||0)-(b.row||0)).forEach(n=>{
-    const fill=lc(n.color||D.fill), stroke=lc(n.stroke||D.stroke), ph=n.phaseId?phases[n.phaseId]:null;
+    const fill=lc(n.color)||lc(D.fill), stroke=lc(n.stroke)||lc(D.stroke), ph=n.phaseId?phases[n.phaseId]:null;
     const isDef=fill===lc(D.fill)&&stroke===lc(D.stroke), byPhase=!isDef&&!!(ph&&ph.color&&lc(ph.color)===stroke);
     const key=isDef?'task':(byPhase?'task@'+stroke:'task:'+fill+'|'+stroke);
     let g=byKey[key]; if(!g){ g=byKey[key]={key,fill,stroke,isDef,byPhase,names:[]}; groups.push(g); }
@@ -7831,11 +7840,12 @@ function ganttModalColsHtml(n,draft){
   rows.forEach((row,ri)=>{
     h+=`<div class="gm-cols-rh">行${ri+1}`+(rows.length>1?`<button type="button" class="gm-row-del" title="この行を消します（全部のタスクから消えます・「適用」で反映）" onclick="ganttModalDelRow('${row}')">×</button>`:'')+`</div>`;
     cols.forEach(c=>{
-      const at=`data-col="${c.id}" data-row="${row}"`;
+      const cid=esc(c.id);   // v8.33: 列の id（取り込んだファイルの値）も属性に入れる前にエスケープ。行の id は ganttInfoRowIds で形を確かめ済み
+      const at=`data-col="${cid}" data-row="${row}"`;
       h+=`<div class="gm-cols-cell">`
-        +`<input type="text" class="l" id="gm-col-${c.id}-${row}-l" ${at} data-k="l" placeholder="項目名" value="${esc(get(c,row,'l'))}"/>`
+        +`<input type="text" class="l" id="gm-col-${cid}-${row}-l" ${at} data-k="l" placeholder="項目名" value="${esc(get(c,row,'l'))}"/>`
         +`<span>：</span>`
-        +`<input type="text" id="gm-col-${c.id}-${row}-v" ${at} data-k="v" placeholder="本文" value="${esc(get(c,row,'v'))}"/></div>`;
+        +`<input type="text" id="gm-col-${cid}-${row}-v" ${at} data-k="v" placeholder="本文" value="${esc(get(c,row,'v'))}"/></div>`;
     });
   });
   h+=`</div></div><button type="button" class="gm-rows-add" onclick="ganttModalAddRow()" title="下に行を足します（全部のタスクに増えます・「適用」で工程表へ反映）"><span>＋</span> 行を追加</button>`
@@ -17485,11 +17495,13 @@ function ganttHeadDlgBody(){
     +`<label class="ghm-chk"><input type="checkbox" ${lg.auto!==false?'checked':''} onchange="ganttLegendSet('auto',this.checked)"> 色・記号から自動生成</label></div>`;   // v8.33: サイドバーと同じ名前・同じ判定に
   if(lg.show){
     let li='';
+    // v8.33: 色は #16 進の形だけ HTML に入れる（取り込んだファイルの色の値で属性を壊させない＝ghColor）
+    const ghColor=(c,d)=>(typeof c==='string'&&/^#[0-9a-fA-F]{3,8}$/.test(c))?c:d;
     ganttLegendItems().forEach(it=>{ if(String(it.key).indexOf('extra')===0)return;
-      const sw=it.kind==='shade'?'#eef2f6':(it.fill||'#ffffff'), sk=it.kind==='shade'?'#e2e8f0':(it.stroke||'#cbd5e1');   // v8.33: 見本に枠の色も
-      li+=`<div class="ghm-row"><span class="ghm-sw" style="background:${sw};border-color:${sk}"></span><input class="ghm-in ghm-rv" type="text" value="${he(it.label)}" oninput="ganttLegendSetOverride('${it.key}',this.value)"></div>`; });
+      const sw=it.kind==='shade'?'#eef2f6':ghColor(it.fill,'#ffffff'), sk=it.kind==='shade'?'#e2e8f0':ghColor(it.stroke,'#cbd5e1');   // v8.33: 見本に枠の色も
+      li+=`<div class="ghm-row"><span class="ghm-sw" style="background:${sw};border-color:${sk}"></span><input class="ghm-in ghm-rv" type="text" value="${he(it.label)}" oninput="ganttLegendSetOverride('${he(it.key)}',this.value)"></div>`; });
     // v8.33: 色は見本のボタン→ツールバーの「色」と同じポップアップ（ganttLegendColorMenu）
-    (lg.extra||[]).forEach((ex,i)=>{ li+=`<div class="ghm-row"><button type="button" class="ghm-lgc" title="色を選ぶ" onclick="ganttLegendColorMenu(event,${i})"><span style="background:${ex.color||'#dcfce7'};box-shadow:inset 0 0 0 2px ${ex.stroke||'#16a34a'}"></span>▼</button><input class="ghm-in ghm-rv" type="text" value="${he(ex.label)}" placeholder="工種・業者名" oninput="ganttLegendSetExtra(${i},'label',this.value)"><button class="ghm-ic del" title="削除" onclick="ganttLegendRemoveExtra(${i})">×</button></div>`; });
+    (lg.extra||[]).forEach((ex,i)=>{ li+=`<div class="ghm-row"><button type="button" class="ghm-lgc" title="色を選ぶ" onclick="ganttLegendColorMenu(event,${i})"><span style="background:${ghColor(ex.color,'#dcfce7')};box-shadow:inset 0 0 0 2px ${ghColor(ex.stroke,'#16a34a')}"></span>▼</button><input class="ghm-in ghm-rv" type="text" value="${he(ex.label)}" placeholder="工種・業者名" oninput="ganttLegendSetExtra(${i},'label',this.value)"><button class="ghm-ic del" title="削除" onclick="ganttLegendRemoveExtra(${i})">×</button></div>`; });
     html+=`<div class="ghm-sub">凡例ラベルの上書き・工種色の追加</div>`+li+`<button class="ghm-add" onclick="ganttLegendAddExtra()">＋ 凡例項目を追加（工種色分け等）</button>`;
   }
   return html;
