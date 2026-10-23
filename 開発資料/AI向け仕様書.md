@@ -8,6 +8,7 @@
 - 併読推奨: `CLAUDE.md`（プロジェクト指示・**現行ステータス＝各版の変更点の要約**）／`開発資料/運用ルール.txt`（バージョニング）／`開発資料/開発ロードマップ/開発ロードマップ.txt`（計画）／`開発資料/開発記録/開発記録_v8.txt`（why・経緯）
 - 置き場所（2026-10-15 に整理）: 実装＝`アプリケーション本体/MultipurposeDiagramMaker_vX.YZ.html`（v8.33 で diagram_vX.YZ.html から改名）・マニュアルと作成ツール＝`マニュアル/`・記録と計画＝`開発資料/`（`CLAUDE.md` の「ディレクトリ構成」）
 - 本ファイルはコードの「what/how の索引」。**why・バグ経緯は `開発記録*.txt` が正**。仕様変更時は本ファイルも追随更新すること。
+- **図を作る AI 向けの説明は別にある**（v8.33追補）: 本体の `<head>` の先頭に HTML のコメント「AI作図の手引き」として組み込んでいる（画面には出ない・保存ファイルにも入る）。図のデータの形を変えたら手引きも直す（`運用ルール.txt` の「編集時の必須作業」7）。本ファイルはアプリを改修する AI 向け。
 
 ---
 
@@ -314,6 +315,7 @@ DIAGRAM_TYPES[key] = {
 1. 現在の `document.documentElement.outerHTML` を取得（＝アプリ本体そのもの）。
 2. 状態オブジェクト `st = {diagramType,orientation,lanes,nodes,edges,uid,diagramName,gantt,mindLayout,gridOn,style,stepNums,docId,mindBranch,mindReserve,printPaper,printOrient,appVer:APP_VER}` をJSON化。
 3. 既存の状態埋め込みscriptを除去し、`</head>` の直前に `<script id="swimlane-state">window.__SWIMLANE_STATE__={...};</script>` を注入。
+   v8.33追補から、除去は DOM（`querySelectorAll('script#__state__,script#swimlane-state')` を remove）で、注入は `document.head.outerHTML` の末尾（本物の閉じタグ）の直前に行う。文字列の置き換えで探すと、`<head>` 先頭の「AI作図の手引き」（コメント）の中の同じ文字に当たり、図のデータがコメントの中に入ってしまうため。
 4. `<filename>.html` としてダウンロード（`dl()`・File System Access API の `showSaveFilePicker` があれば `id:'bdm-save'`＋`startIn` で同じ場所へ）。→ **アプリ＋データが1ファイルに同梱された自己完結HTML**。
 
 ### 未保存判定（v8.11追補・指紋方式）
@@ -322,7 +324,8 @@ DIAGRAM_TYPES[key] = {
 
 ### 復元（`init` / `extractSavedState` / `importStateFromHtml`）
 - 起動時に `window.__SWIMLANE_STATE__` があれば読み込んで `S` を復元。
-- 別の保存HTMLを取り込む場合は `importFromFile`→`extractSavedState(html)`（正規表現で埋め込み状態を抽出）。
+- 別の保存HTMLを取り込む場合は `importFromFile`→`extractSavedState(html)`（正規表現で埋め込み状態を抽出）。v8.33追補から、まず `DOMParser` で `script#swimlane-state` 要素として探し（手引きのコメントの中の文字を拾わない・`=` の前後の空白も可）、見つからなければ従来の文字の検索。
+- **AI が書いた図のデータの受け入れ**（v8.33追補）: `init` と `importStateFromHtml` が最初に `fillStateDefaults(st)`（無い項目だけ埋める＝lanes/nodes/edges の配列・レーンの名前と色と幅・シェイプの text と x/y/w/h（ガント以外）・レーンの無い図の lid・`uid` を `e`＋数字の id の最大まで進める・線の id・ガントは `fillGanttDefaults`＝行の番号・時間軸の範囲・見出し欄と凡例と休日の中の項目）。アプリで保存したファイルは全部の項目を持つので何も変わらない（既存の図 16 本で旧版と一致を確認）。線の label・fromLabel・toLabel・fromLid・toLid は埋めない（無くても描ける・埋めると保存内容が変わる）。図のデータに `finishOnOpen:true` があれば、描いた後に `finishAiDraftOnOpen()`（ガント＝色の無いタスクにフェーズの色／シーケンス＝ライフラインとメッセージを順に並べる／ほか＝`autoLayout({linkedOverlays:true})`＝線でつながった書類・データ・補足情報も工程として並べる）→ `snapAsFirst()`。保存し直すとこの印は残らない。
 - **旧版データの移行** `migrateLegacyEdgeRouting(appVer)`: `appVer` を持たない v8.13 以前の保存だけ、経路指定5フィールド（waypoints/orthoWps/midPos/fromPin/toPin）を落として今のルーターで引き直す。v8.14 以降は版が違っても手動編集を残す（5 フィールドは手で編集したときにしか付かない＝編集していない線は常に今の版の規則で引き直される）。経緯: v8.14 落とす → v8.16 残す（ユーザー 2026-08-26）→ v8.26 版が違えば全部落とす（ユーザー 2026-09-07）→ **v8.31追補⑤ 残す（ユーザー 2026-09-25「編集した箇所は引き継ぎ、デフォルトのままの箇所はデフォルトに」）**。変える前にユーザーへ確認すること。
 - **後方互換**: 旧キー（`swimlane-state`/`__state__`/`data-state`）も読めるよう配慮。新プロパティは未定義でも動くようにする（optional前提）。配列形の `cuts`（v8.24）を v8.23 以前で開くとその角の切り欠きだけ黙って消える（落ちない）。
 
