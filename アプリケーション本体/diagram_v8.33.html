@@ -416,6 +416,13 @@ body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;displ
 .gm-cols-add b{font-size:18px;line-height:1}
 .gm-cols-add:hover{border-color:#3b82f6;color:#2563eb;background:#eff6ff}
 .gm-cols-hint{font-size:11px;color:#94a3b8}
+/* v8.33: 情報欄の行の「×」・表の下の「＋ 行を追加」・タスク名の欄（［項目名］：［本文］） */
+.gm-row-del{margin-left:4px;width:16px;height:16px;border:none;background:none;color:#94a3b8;cursor:pointer;font-size:12px;line-height:1;padding:0;border-radius:4px}
+.gm-row-del:hover{color:#dc2626;background:#fee2e2}
+.gm-rows-add{width:calc(100% - 70px);margin:0 0 6px;padding:7px;border:1.5px dashed #cbd5e1;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.gm-rows-add:hover{border-color:#3b82f6;color:#2563eb;background:#eff6ff}
+.gm-name-cell{border-radius:6px}
+.gm-field .gm-name-cell input.l{flex:0 0 120px}
 .gm-dates{display:grid;grid-template-columns:1fr 1fr;gap:10px}   /* v8.32: 開始日と終了日を横に並べる */
 /* v6.06: 休工期間（タスク編集ダイアログ） */
 .gm-field.susp .gm-susp-lab{display:flex;align-items:center;gap:7px;margin-bottom:4px}
@@ -463,8 +470,11 @@ body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;displ
 .ghm-role{width:100%;text-align:center;font-weight:700;color:#334155;padding:6px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none;margin-bottom:4px;box-sizing:border-box;background:#f8fafc}
 .ghm-name{width:100%;text-align:center;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;outline:none;box-sizing:border-box}
 .ghm-name:focus,.ghm-role:focus{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.12)}
-.ghm-sw{flex:0 0 16px;height:12px;border-radius:3px;border:1px solid #cbd5e1}
-.ghm-color{flex:0 0 30px;height:30px;padding:1px;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer}
+.ghm-sw{flex:0 0 16px;height:12px;border-radius:3px;border:1.5px solid #cbd5e1}
+/* v8.33: 凡例項目の色ボタン（押すとツールバーの「色」と同じポップアップ） */
+.ghm-lgc{flex:0 0 auto;width:42px;height:32px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px;padding:0 4px;font-size:9px;color:#64748b}
+.ghm-lgc span{width:22px;height:20px;border-radius:5px;display:inline-block}
+.ghm-lgc:hover{border-color:#3b82f6}
 .ghm-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
 .ghm-foot button{padding:7px 18px;border-radius:6px;font-size:13px;cursor:pointer;border:1.5px solid #e2e8f0;background:#f8fafc;color:#374151}
 .ghm-foot button:hover{background:#f1f5f9}
@@ -6142,22 +6152,47 @@ function ganttColList(){ const g=S.gantt;
   return g.cols;
 }
 function ganttColsTotalW(){ return ganttColList().reduce((a,c)=>a+(c.width||120),0); }
-function ganttDefLabel(colId,row){ return colId==='c0'?(row==='r3'?'概要':'担当'):''; }
+// v8.33: 情報欄の行（全タスク・全列で共通）。無ければ従来の上段・下段＝['r3','r4']。足した行の id は 'ri'+uid
+//   （ユーザー要望 2026-10-23「情報欄で行を追加できるように」）。項目名は列ごとに col[行id+'Label']＝r3Label/r4Label と同じ形
+function ganttInfoRowIds(){ const r=S.gantt&&S.gantt.infoRows; return (Array.isArray(r)&&r.length)?r:['r3','r4']; }
+// v8.33: タスク名の行の項目名（全タスク共通・既定「タスク名」。「工事名」などに変えられる）
+function ganttNameLabel(){ const v=S.gantt&&S.gantt.nameLabel; return v==null?'タスク名':String(v); }
+function ganttDefLabel(colId,row){ return colId==='c0'?(row==='r3'?'概要':row==='r4'?'担当':''):''; }
 function ganttLabelW(label){ const fs=11, s=(label||'')+'：'; let w=0; for(const ch of s) w+=(ch.charCodeAt(0)>255?fs:fs*0.6); return w; }
 // 微修正(v8.00据置・B案): 項目名(ラベル)は「列のプロパティ」＝全タスク共通。col.r3Label/col.r4Label に保持。
 //   既定は c0=概要/担当、追加列=空。本文(値)は従来どおりタスクごと（c0=desc/assignee, 他=cells[colId].v）。
-function ganttColLabel(colId,row){ const col=ganttColList().find(c=>c.id===colId); const k=(row==='r3')?'r3Label':'r4Label'; return (col&&col[k]!=null)?col[k]:ganttDefLabel(colId,row); }
-function ganttSetColLabel(colId,row,label){ const col=ganttColList().find(c=>c.id===colId); if(!col)return; col[(row==='r3')?'r3Label':'r4Label']=label; if(label!=null&&label!=='') S.gantt.lastLabel=label; }
+//   v8.33: 足した行も同じ形（col[行id+'Label']）
+function ganttColLabel(colId,row){ const col=ganttColList().find(c=>c.id===colId); const k=row+'Label'; return (col&&col[k]!=null)?col[k]:ganttDefLabel(colId,row); }
+function ganttSetColLabel(colId,row,label){ const col=ganttColList().find(c=>c.id===colId); if(!col)return; col[row+'Label']=label; if(label!=null&&label!=='') S.gantt.lastLabel=label; }
+// v8.33: 項目名の帯の幅（列ごと・全タスク共通）＝その列の項目名で一番長いもの＋左右 6px。列1 はタスク名と工程の項目名も含める
+//   （同じ帯の幅にして、タスク名・工程・情報欄の本文の書き出しをそろえる）。項目名が 1 つも無い列は 0＝帯を描かない
+function ganttColLabelW(col){
+  const labs=ganttInfoRowIds().map(r=>String(ganttColLabel(col.id,r)||'').trim());
+  if(col.id==='c0') labs.push(ganttNameLabel().trim(),'工程');
+  const w=labs.filter(Boolean).reduce((a,s)=>Math.max(a,ganttTextW(s,11)),0);
+  return w?Math.ceil(w)+12:0;
+}
+// v8.33: 帯の左端（列の左端から）と、本文の書き出し（列の左端から）
+const GANTT_LABEL_X=4;
+function ganttBodyX(col){ const lw=ganttColLabelW(col); return lw?GANTT_LABEL_X+lw+6:GANTT_DESC_INDENT; }
+// v8.33: 項目名の帯の色＝タスクの枠の色（ふつうはフェーズの色）を薄く（色ア・ユーザー決定 2026-10-23）。
+//   fill＝帯の塗り・line＝帯と本文の境目の線・text＝項目名の文字。画面（renderGanttNameCol）と Excel（expExcel）が共用する
+function ganttBandColor(n){
+  const base=n.stroke||(SD[n.type]&&SD[n.type].stroke)||SD.gantt_task.stroke;
+  return {fill:ganttLighten(base,0.88),line:ganttLighten(base,0.45),text:ganttDarken(base,0.1)};
+}
 // 旧データ移行（冪等）: タスクごとに持っていた項目名(cell.l)を列ラベルへ集約（最初の非空を採用）。
 function ganttMigrateColLabels(){ const g=S.gantt; if(!g||!Array.isArray(g.cols))return;
   g.cols.forEach(col=>{ ['r3','r4'].forEach(row=>{ const k=(row==='r3')?'r3Label':'r4Label'; if(col[k]!=null)return;
     for(const n of S.nodes){ const cc=n.cells&&n.cells[col.id]&&n.cells[col.id][row]; if(cc&&cc.l!=null&&String(cc.l).trim()!==''){ col[k]=cc.l; break; } } }); }); }
 // 既存呼び出し互換（n は無視＝列ラベルを返す）。
 function ganttCellLabel(n,colId,row){ return ganttColLabel(colId,row); }
-function ganttCellVal(n,colId,row){ if(colId==='c0') return (row==='r3'?(n.desc||''):(n.assignee||'')); n.cells=n.cells||{}; const c=n.cells[colId]=n.cells[colId]||{}; const cell=c[row]=c[row]||{}; return cell.v||''; }
-function ganttSetCell(n,colId,row,label,val){ ganttSetColLabel(colId,row,label); if(colId==='c0'){ if(row==='r3') n.desc=val; else n.assignee=val; } else { n.cells=n.cells||{}; const c=n.cells[colId]=n.cells[colId]||{}; const cell=c[row]=c[row]||{}; cell.v=val; } }
-// セルの折返し行配列（本文のみ。空なら ['']）。ぶら下げ用に列幅からラベル幅を控除。
-function ganttCellLines(n,col,row){ const val=ganttCellVal(n,col.id,row); if(!val||!String(val).trim()) return ['']; const wrapW=Math.max(20,(col.width||120)-GANTT_DESC_INDENT-8); const bodyW=Math.max(24, wrapW-ganttLabelW(ganttCellLabel(n,col.id,row))); return wrapText(String(val),bodyW,11); }
+// v8.33: c0 の上段・下段だけ desc/assignee（従来どおり）。足した行は c0 も n.cells に入れる
+function ganttCellVal(n,colId,row){ if(colId==='c0'&&(row==='r3'||row==='r4')) return (row==='r3'?(n.desc||''):(n.assignee||'')); n.cells=n.cells||{}; const c=n.cells[colId]=n.cells[colId]||{}; const cell=c[row]=c[row]||{}; return cell.v||''; }
+function ganttSetCell(n,colId,row,label,val){ ganttSetColLabel(colId,row,label); if(colId==='c0'&&(row==='r3'||row==='r4')){ if(row==='r3') n.desc=val; else n.assignee=val; } else { n.cells=n.cells||{}; const c=n.cells[colId]=n.cells[colId]||{}; const cell=c[row]=c[row]||{}; cell.v=val; } }
+// セルの折返し行配列（本文のみ。空なら ['']）。
+//   v8.33: 本文は項目名の帯の右から（ganttBodyX）＝折り返し幅は列幅−本文の書き出し−右の余白 6px
+function ganttCellLines(n,col,row){ const val=ganttCellVal(n,col.id,row); if(!val||!String(val).trim()) return ['']; const bodyW=Math.max(24,(col.width||120)-ganttBodyX(col)-6); return wrapText(String(val),bodyW,11); }
 function ganttCellLineCount(n,col,row){ return ganttCellLines(n,col,row).length; }
 // そのセルが実際に描かれるか＝本文がある。描画側の表示条件と同じ判定をここに集約。
 //   v8.32: 項目名だけ（本文が空）の欄は描かない・数えない（c0 と追加列で同じ扱い）。v8.00追補②の「追加列は項目名だけでも表示」をやめ、
@@ -6167,13 +6202,26 @@ function ganttCellShown(n,col,row){ return !!String(ganttCellVal(n,col.id,row)).
 //   v8.32: 行の高さには使わなくなった（ganttInfoLines）。使われていない旧エディタ ganttEditCell が参照するので残す
 function ganttRowMaxLines(n,row){ let m=0; ganttColList().forEach(c=>{ if(ganttCellShown(n,c,row)) m=Math.max(m,ganttCellLineCount(n,c,row)); }); return m; }
 // v8.32: その列で本文のある項目（上段→下段の順）の折り返し行数の合計＝その列を上から詰めたときの行数
-function ganttColInfoLines(n,col){ let k=0; ['r3','r4'].forEach(row=>{ if(ganttCellShown(n,col,row)) k+=ganttCellLineCount(n,col,row); }); return k; }
+function ganttColInfoLines(n,col){ let k=0; ganttInfoRowIds().forEach(row=>{ if(ganttCellShown(n,col,row)) k+=ganttCellLineCount(n,col,row); }); return k; }
 // v8.32: 左上の黒い帯（時間軸ヘッダーの左）と Excel の見出しに出す列の見出し。列1＝「タスク / 〈上段の項目名〉 / 〈下段の項目名〉」・
 //   追加列＝「〈上段〉 / 〈下段〉」（空の項目名は飛ばす）。追加列で両方空なら淡色の「列N」（dim）。既定の列1 は従来どおり「タスク / 概要 / 担当」
+//   v8.33: 行は ganttInfoRowIds の全部。列1 の先頭はタスク名の項目名（既定「タスク名」）
 function ganttColHeadText(col,ci){
-  const labs=['r3','r4'].map(r=>String(ganttColLabel(col.id,r)||'').trim()).filter(Boolean);
-  if(ci===0) return {txt:['タスク'].concat(labs).join(' / '),dim:false};
+  const labs=ganttInfoRowIds().map(r=>String(ganttColLabel(col.id,r)||'').trim()).filter(Boolean);
+  if(ci===0){ const nl=ganttNameLabel().trim(); return {txt:(nl?[nl]:[]).concat(labs).join(' / ')||'列1',dim:false}; }
   return labs.length?{txt:labs.join(' / '),dim:false}:{txt:'列'+(ci+1),dim:true};
+}
+// v8.33: 情報欄の行を消す＝全タスク・全列のその行の本文と項目名を消す（ganttDeleteColumn と同じ扱い）。最後の 1 行は消さない。
+//   c0 の上段・下段は desc/assignee を空にする（キーは検索・CSV 取込と共用なので残す）
+function ganttDeleteInfoRow(row){
+  const rows=ganttInfoRowIds().slice(), i=rows.indexOf(row); if(i<0||rows.length<=1) return false;
+  rows.splice(i,1); S.gantt.infoRows=rows;
+  ganttColList().forEach(c=>{ delete c[row+'Label']; });
+  S.nodes.forEach(n=>{
+    if(n.cells) Object.keys(n.cells).forEach(cid=>{ if(n.cells[cid]) delete n.cells[cid][row]; });
+    if(row==='r3'&&n.desc!=null) n.desc=''; if(row==='r4'&&n.assignee!=null) n.assignee='';
+  });
+  return true;
 }
 // v8.32: 情報欄の行数＝記入が一番多い列に合わせる（列ごとに本文のある項目だけを上から詰める）。
 //   従来は「上段どうし・下段どうし」を全列まとめて数えていた＝列1 は上段だけ・列2 は下段だけのように空欄が互い違いだと 2 段のままだった
@@ -6422,20 +6470,52 @@ function calcGanttPositions(){
 // ===== v8.00: ガント見出しブロック（表題部＋承認欄＋凡例） =====
 function ganttHeadH(){ const h=S.gantt&&S.gantt.header; if(!h||!h.show) return 0; return ganttHeadModel().H; }
 function ganttBodyTop(){ return ganttHeadH()+(ganttWrapOn()?GANTT_BAND_LABEL_H:0)+GANTT_HEADER_H; }   // v8.08: 折り返し時は段見出しぶんも下げる   // 内容（行）の上端＝見出し＋時間軸ヘッダーの下
-// 凡例に載せる項目を、図で実際に使われている要素から自動生成（＋手動 extra）。
-function ganttLegendItems(){
+// v8.33: タスクを色でまとめる＝凡例の「タスクの色ごとに 1 項目」（ユーザー決定 2026-10-23）。
+//   従来は種類ごとに 1 項目で色も既定色に固定＝タスクの色を変えても凡例に出なかった。
+//   まとめ方: 既定の色＝従来の 'task'（上書き名もそのまま）／フェーズの色に追従している（枠＝所属フェーズの色）＝
+//   そのフェーズの色ごと（塗りは追従の 0.80 と見本データの 0.82 が混じるので枠の色だけで束ねる）／それ以外＝塗りと枠の組ごと。
+//   名前に「予定（）」は付けない（ユーザー決定）＝フェーズ名、手で変えた色は入力した名前（未入力の間は色の名前）。並びは上の行から
+function ganttTaskColorGroups(){
+  const D=SD.gantt_task, lc=c=>String(c||'').toLowerCase(), phases={};
+  S.nodes.forEach(p=>{ if(p.type==='gantt_summary') phases[p.id]=p; });
+  const groups=[], byKey={};
+  S.nodes.filter(n=>n.type==='gantt_task').sort((a,b)=>(a.row||0)-(b.row||0)).forEach(n=>{
+    const fill=lc(n.color||D.fill), stroke=lc(n.stroke||D.stroke), ph=n.phaseId?phases[n.phaseId]:null;
+    const isDef=fill===lc(D.fill)&&stroke===lc(D.stroke), byPhase=!isDef&&!!(ph&&ph.color&&lc(ph.color)===stroke);
+    const key=isDef?'task':(byPhase?'task@'+stroke:'task:'+fill+'|'+stroke);
+    let g=byKey[key]; if(!g){ g=byKey[key]={key,fill,stroke,isDef,byPhase,names:[]}; groups.push(g); }
+    if(byPhase){ const nm=(ph.text||'').trim()||'フェーズ'; if(!g.names.includes(nm)) g.names.push(nm); }
+  });
+  let k=0;
+  groups.forEach(g=>{
+    if(g.isDef) g.label='予定（タスク）';
+    else if(g.byPhase) g.label=g.names.join('・');
+    else { const c=GANTT_COLORS.find(c=>lc(c.fill)===g.fill&&lc(c.stroke)===g.stroke); g.label=c?c.name:('色'+(++k)); }
+  });
+  return groups;
+}
+// v8.33: 凡例に「土日・休工日」を載せるか＝網掛けが実際に出るときだけ（従来は常に載せていた）。
+//   画面・PNG・印刷は日・時の目盛りだけ網掛け（renderGanttGrid）、Excel は日の列に分けるので月以外で網掛け（expExcel）。
+//   休日（土・日・祝）のチェックが全部外れていれば、どれも網掛けしない
+function ganttLegendShowsWeekend(ctx){
+  const g=S.gantt||{}, h=g.holidays||{};
+  if(!(h.sat!==false||h.sun!==false||h.jp)) return false;
+  return (ctx&&ctx.excel)? g.scale!=='month' : (g.scale==='day'||g.scale==='hour');
+}
+// 凡例に載せる項目を、図で実際に使われている要素から自動生成（＋手動 extra）。ctx.excel＝Excel 出力用
+function ganttLegendItems(ctx){
   const lg=(S.gantt&&S.gantt.legend)||{}; if(lg.show===false) return [];
   const ov=lg.overrides||{}; const items=[]; const lab=(k,d)=>ov[k]!=null?ov[k]:d;
   const has=t=>S.nodes.some(n=>n.type===t);
   if(lg.auto!==false){
     if(has('gantt_task')){
-      items.push({key:'task',label:lab('task','予定（タスク）'),kind:'bar',fill:SD.gantt_task.fill,stroke:SD.gantt_task.stroke});
+      ganttTaskColorGroups().forEach(g=>items.push({key:g.key,label:lab(g.key,g.label),kind:'bar',fill:g.fill,stroke:g.stroke}));
       if(S.nodes.some(n=>n.type==='gantt_task'&&(n.progress||0)>0)) items.push({key:'progress',label:lab('progress','進捗（実績）'),kind:'progress',fill:SD.gantt_task.fill,stroke:SD.gantt_task.stroke});
     }
     if(has('gantt_milestone')) items.push({key:'milestone',label:lab('milestone','マイルストーン'),kind:'diamond',fill:SD.gantt_milestone.fill,stroke:SD.gantt_milestone.stroke});
     if(has('gantt_summary')) items.push({key:'summary',label:lab('summary','フェーズ（工程）'),kind:'phase',fill:SD.gantt_summary.fill,stroke:SD.gantt_summary.stroke});   // v8.08追補⑤: 実バーと同じ縁取り
     if(S.nodes.some(n=>n.type==='gantt_task'&&n.suspensions&&n.suspensions.length)) items.push({key:'suspend',label:lab('suspend','休工'),kind:'shade'});
-    items.push({key:'weekend',label:lab('weekend','土日・休工日'),kind:'shade'});
+    if(ganttLegendShowsWeekend(ctx)) items.push({key:'weekend',label:lab('weekend','土日・休工日'),kind:'shade'});
   }
   (lg.extra||[]).forEach((ex,i)=>{ if(ex&&(ex.label||'').trim()) items.push({key:'extra'+i,label:ex.label,kind:'bar',fill:ex.color||'#dcfce7',stroke:ex.stroke||'#22c55e'}); });
   return items;
@@ -6457,6 +6537,14 @@ function ganttHeadModel(){
   //   「見出しの下（表題・情報行・承認欄より下）に右詰め」で置く＝幅を情報行と取り合わないので
   //   項目が増えても文字を縮めずに済み、見出しの右ゾーンも低くなる。折り返しOFFは従来の縦積み。
   const lgInline=lgOn&&ganttWrapOn();
+  // v8.33: 縦積みの凡例は列の幅を中身から決める（最小は従来の 392 の 3 等分）。タスクの色ごとの項目でフェーズ名や
+  //   入力した名前が入るようになり、固定幅だと隣の列へはみ出すため。横位置・当たり判定は ganttLegendBoxW で共用
+  let lgColW=null, lgW=392;
+  if(lgOn&&!lgInline){
+    const base=(392-16)/3; lgColW=[base,base,base];
+    lgItems.forEach((it,i)=>{ lgColW[i%3]=Math.max(lgColW[i%3],Math.ceil(28+ganttTextW(it.label,11)+12)); });
+    lgW=16+lgColW[0]+lgColW[1]+lgColW[2];
+  }
   const lgRows=lgOn?(lgInline?1:Math.max(1,Math.ceil(lgItems.length/3))):0;
   const lgH=lgOn?(lgInline?22:(18+lgRows*20)):0;
   const lgTopStacked=appOn?104:24;
@@ -6466,9 +6554,12 @@ function ganttHeadModel(){
   const lgTop=lgInline?(baseH+2):lgTopStacked;
   // v8.11: 右下の「見出しを隠す」ボタンぶんの余白を最後に足す（凡例・承認欄と重ねないため）。
   const H=(lgInline?(lgTop+lgH+6):baseH)+GANTT_HEAD_BTN_H;
-  _ganttHeadModel={H,baseH,rpc,infoRowH,titleBottom,appOn,lgItems,lgOn,lgInline,lgTop,lgRows,lgH,collapsed:false};
+  _ganttHeadModel={H,baseH,rpc,infoRowH,titleBottom,appOn,lgItems,lgOn,lgInline,lgTop,lgRows,lgH,lgColW,lgW,collapsed:false};
   return _ganttHeadModel;
 }
+// v8.33: 縦積みの凡例の枠の幅。中身の幅（m.lgW）が見出し欄の半分を超えるときは半分で止め、項目名を…で切る
+//   （左の情報行と重ならないように）。描画（renderGanttTitleBlock）とダブルクリックの当たり判定が共用する
+function ganttLegendBoxW(m,W){ return Math.min(m.lgW||392,Math.max(392,W*0.5)); }
 // 凡例の色見本（種類別）
 function ganttLegendSwatch(gg,it,x,y){
   if(it.kind==='diamond'){ gg.appendChild(e('path',{d:`M${x+10} ${y} l6 6 l-6 6 l-6 -6 z`,fill:it.fill,stroke:it.stroke,'stroke-width':1.2,'pointer-events':'none'})); return; }
@@ -6497,7 +6588,7 @@ function ganttHeadHitField(x,y){
   if(m.collapsed||!n||y<m.titleBottom) return 'ghm-title';
   const rEdge=W-14, inBox=(x0,y0,w,hh)=>x>=x0&&x<=x0+w&&y>=y0&&y<=y0+hh;
   if(m.appOn&&inBox(rEdge-210,24,210,72)) return 'ghm-title';
-  if(m.lgOn&&!m.lgInline&&inBox(rEdge-392,m.lgTop,392,m.lgH)) return 'ghm-title';
+  if(m.lgOn&&!m.lgInline){ const lw=ganttLegendBoxW(m,W); if(inBox(rEdge-lw,m.lgTop,lw,m.lgH)) return 'ghm-title'; }
   const g=ganttHeadInfoGeom(m,W), col=x>=g.col2X?1:0;
   const rowI=Math.floor((y-g.firstBase+21)/m.infoRowH);   // 行の帯＝ベースラインの 21px 上から 1 行ぶん（文字は 15px）
   const i=col*m.rpc+rowI;
@@ -6582,14 +6673,14 @@ function renderGanttTitleBlock(){
       cx+=sw+sgap+ganttTextW(lb,fs)+lgap;
     });
   } else if(m.lgOn){
-    const lw=392, lx0=rEdge-lw, ly0=m.lgTop, lh=m.lgH;
+    const lw=ganttLegendBoxW(m,W), lx0=rEdge-lw, ly0=m.lgTop, lh=m.lgH;
     gg.appendChild(e('rect',{x:lx0,y:ly0,width:lw,height:lh,rx:6,fill:'#ffffff',stroke:'#1e293b','stroke-width':1.6,'pointer-events':'none'}));
     gg.appendChild(e('text',{x:lx0+10,y:ly0+16,'font-size':'12','font-weight':'700',fill:'#334155','pointer-events':'none'})).textContent='凡例';
-    const colW=(lw-16)/3;
+    const k=(lw-16)/(m.lgW-16), colW=m.lgColW.map(w=>w*k), colX=[0,colW[0],colW[0]+colW[1]];   // v8.33: 列の幅は中身から（ganttHeadModel）
     m.lgItems.forEach((it,i)=>{
-      const col=i%3, row=Math.floor(i/3), ix=lx0+8+col*colW, by=ly0+33+row*20, sy=by-10, tx=ix+28;
+      const col=i%3, row=Math.floor(i/3), ix=lx0+8+colX[col], by=ly0+33+row*20, sy=by-10, tx=ix+28;
       ganttLegendSwatch(gg,it,ix,sy);
-      gg.appendChild(e('text',{x:tx,y:by,'font-size':'11',fill:'#1e293b','pointer-events':'none'})).textContent=it.label;
+      gg.appendChild(e('text',{x:tx,y:by,'font-size':'11',fill:'#1e293b','pointer-events':'none'})).textContent=k<1?ganttClip(it.label,colW[col]-28-6,11):it.label;
     });
   }
 }
@@ -7191,18 +7282,36 @@ function renderGanttNameCol(){
     t.textContent=opt.noClip?str:ganttClip(hasVal?str:(opt.ph||''), opt.maxW||200, fs);
     gg.appendChild(t);
   };
-  const pad=GANTT_ROW_PAD, lh=GANTT_LINE_H, di=GANTT_DESC_INDENT;
+  const pad=GANTT_ROW_PAD, lh=GANTT_LINE_H;
+  // v8.33: 項目名の帯（帯型・ユーザー決定 2026-10-23）。従来の「項目名：本文」を 1 つの文字列で左揃えにする形は、
+  //   項目名の字数で本文の書き出しがずれた（ユーザー指摘）。列ごとに項目名を色の帯にまとめ、帯と本文の境目に線を引く。
+  //   帯の色＝タスクの枠の色（ふつうはフェーズの色）を薄く（色ア・ganttBandColor）。項目名は帯の幅いっぱいに均等割り付け（SVG の textLength）
+  const addBand=(x,y,w,h,c)=>{ if(w<=0||h<=0)return;
+    gg.appendChild(e('rect',{x,y,width:w,height:h,fill:c.fill,'pointer-events':'none'}));
+    gg.appendChild(e('line',{x1:x+w,y1:y,x2:x+w,y2:y+h,stroke:c.line,'stroke-width':1.5,'pointer-events':'none'}));
+  };
+  const addLabel=(x,yMid,w,lab,c)=>{ lab=String(lab||'').trim(); if(!lab||w<=12)return;
+    const inner=w-12, chars=[...lab].length;
+    const at={x:x+6,y:yMid,'dominant-baseline':'middle','font-size':'11','font-weight':'600',fill:c.text,'pointer-events':'none'};
+    if(chars<2){ at.x=x+w/2; at['text-anchor']='middle'; }
+    else if(ganttTextW(lab,11)<inner-0.5){ at.textLength=inner; at.lengthAdjust='spacing'; }   // 一番長い項目名は自然な字間のまま
+    gg.appendChild(e('text',at)).textContent=lab;
+  };
   L.slots.forEach(s=>{
     if(s.kind!=='task')return;   // v4.19: フェーズヘッダー行/空き行は名称列に描画しない（名称は左のフェーズ列）
     const n=s.node; if(!n)return;
-    const sel=S.sel.includes(n.id), top=s.top;
+    const sel=S.sel.includes(n.id), top=s.top, bc=ganttBandColor(n);
+    const cols=ganttColList(), c0=cols[0], lw0=ganttColLabelW(c0), bx0=bx+GANTT_LABEL_X, tx0=bx+ganttBodyX(c0);
     // 段1: タスク名（v4.11: フェーズ列ぶん bx 右へシフト）
-    const nameIndent=(n.parentId?26:14);
+    //   v8.33: 段1・段1.5 の左に列1 と同じ幅の帯（項目名＝ganttNameLabel・「工程」）＝本文の書き出しが情報欄とそろう。行は列に分けない
     addHit(n,'text',bx,top,nw,pad+lh);
-    addText(bx+nameIndent, top+pad+lh/2, n.text, {sel,bold:n.type==='gantt_summary',ph:'',fs:12,maxW:nw-nameIndent-6});  // v4.30: 空欄はプレースホルダ非表示（編集時のヒントは ganttEditField で表示）
+    if(lw0){ addBand(bx0,top+pad,lw0,lh*2,bc); addLabel(bx0,top+pad+lh/2,lw0,ganttNameLabel(),bc); addLabel(bx0,top+pad+lh*1.5,lw0,'工程',bc); }
+    const nameX=tx0+(n.parentId?12:0);
+    addText(nameX, top+pad+lh/2, n.text, {sel,bold:n.type==='gantt_summary',ph:'',fs:12,maxW:bx+nw-nameX-6});  // v4.30: 空欄はプレースホルダ非表示（編集時のヒントは ganttEditField で表示）
     // 段1.5: 日付（v4.30。タスク=着手〜完了／マイルストーン=「日付: 」。ダブルクリックで編集モーダル）
-    const dateTop=top+pad+lh;
-    const dateStr=(n.type==='gantt_milestone')?('工程：'+ganttDispDate(n.date)):('工程：'+ganttDispDate(n.startDate)+'～'+ganttDispDate(n.endDate));
+    //   v8.33: 「工程」は帯の項目名に出すので、本文は日付だけ
+    const dateTop=top+pad+lh, di=tx0-bx;
+    const dateStr=(lw0?'':'工程：')+((n.type==='gantt_milestone')?ganttDispDate(n.date):(ganttDispDate(n.startDate)+'～'+ganttDispDate(n.endDate)));
     const dhit=e('rect',{class:'g-hit',x:bx,y:dateTop,width:nw,height:lh,fill:'transparent',cursor:'default'});
     dhit.addEventListener('mousedown',ev=>{ev.stopPropagation();const pt=svgPt(ev);S.sel=[n.id];ganttDragState={mode:'row',nid:n.id,startX:pt.x,startY:pt.y,moved:false};});
     dhit.addEventListener('dblclick',ev=>{ev.stopPropagation();if(nodeClickTimer!==null){clearTimeout(nodeClickTimer);nodeClickTimer=null;}openGanttEditor(n.id);});
@@ -7215,7 +7324,6 @@ function renderGanttNameCol(){
     //   折返し＋ぶら下げを維持し、列幅に応じて自動再折返し。
     //   v8.32: 列ごとに、本文のある項目（上段→下段の順）だけを上から詰めて描く。行の高さは記入が一番多い列に合わせる（ganttInfoLines）。
     //   本文が空の欄は項目名があっても描かない（項目名は左上の黒い帯に列ごとに出す＝renderGanttHeader）
-    const cols=ganttColList();
     // v5.01: 工程行(段1.5)と概要(セル)行の間に区切り線（タスク内側＝細線）。
     //   セル列の縦区切りの上端がこの線に接続し、途切れて見えないようにする（ユーザー指摘）。
     const lineY=top+pad+lh*2;                          // 工程↔概要 区切り線の位置（＝列区切りの上端）
@@ -7225,12 +7333,14 @@ function renderGanttNameCol(){
     addHit(n,'info',bx,lineY,nw,top+s.height-lineY);
     let colx=bx;
     cols.forEach((col,ci)=>{
-      const cw=col.width;
+      const cw=col.width, lw=ganttColLabelW(col), tx=colx+ganttBodyX(col);
       let ry=infoTop;
-      ['r3','r4'].forEach(row=>{
+      // v8.33: 行は ganttInfoRowIds の全部。項目ごとに帯（項目の行数ぶんの高さ）＝上下に続く 1 本の帯に見える
+      ganttInfoRowIds().forEach(row=>{
         if(!ganttCellShown(n,col,row)) return;
-        const lab=ganttCellLabel(n,col.id,row), hang=ganttLabelW(lab), lines=ganttCellLines(n,col,row);
-        lines.forEach((ln,li)=>addText(colx+di+(li?hang:0), ry+li*lh+lh/2, (li?ln:(lab?lab+'：':'')+ln), {sel,fs:11,noClip:true}));
+        const lab=ganttCellLabel(n,col.id,row), lines=ganttCellLines(n,col,row);
+        if(lw){ addBand(colx+GANTT_LABEL_X,ry,lw,lh*lines.length,bc); addLabel(colx+GANTT_LABEL_X,ry+lh/2,lw,lab,bc); }
+        lines.forEach((ln,li)=>addText(tx, ry+li*lh+lh/2, ln, {sel,fs:11,noClip:true}));
         ry+=lh*lines.length;
       });
       colx+=cw;
@@ -7617,8 +7727,11 @@ function openGanttEditor(id){
     isMs?'マイルストーンの編集':isSum?'フェーズの編集':'タスクの編集';
   const box=document.getElementById('gantt-modal-fields');
   const esc=s=>(s||'').replace(/"/g,'&quot;');
-  let html=`<div class="gm-field"><label>${isMs?'マイルストーン名':isSum?'フェーズ名':'タスク名'}</label>
-    <input id="gm-name" type="text" value="${esc(n.text)}"/></div>`;
+  // v8.33: タスク・マイルストーンの名前の欄＝［項目名］：［本文］。項目名は全タスク共通（ganttNameLabel・既定「タスク名」）
+  let html=isSum?`<div class="gm-field"><label>フェーズ名</label>
+    <input id="gm-name" type="text" value="${esc(n.text)}"/></div>`
+    :`<div class="gm-field"><div class="gm-cols-top"><label>${isMs?'マイルストーン名':'タスク名'}</label><span class="gm-cols-note">項目名は全部のタスクで共通です（「工事名」などに変えられます）</span></div>`
+    +`<div class="gm-cols-cell gm-name-cell"><input type="text" class="l" id="gm-name-l" placeholder="項目名" value="${esc(ganttNameLabel())}"/><span>：</span><input id="gm-name" type="text" value="${esc(n.text)}"/></div></div>`;
   if(isSum){
     // v4.17: フェーズは「包括範囲」の概念。期間はメンバーから自動、概要/担当は持たない → 名称＋色のみ
     html+=`<div class="gm-field" style="color:#64748b;font-size:12px">包括範囲はフェーズ列の上下端ドラッグで設定します（期間はメンバーから自動）。</div>`;
@@ -7682,25 +7795,41 @@ function openGanttEditor(id){
 }
 // v8.32: 編集画面の「＋ 列を追加」で足した列。「適用」（confirmGanttEdit）で S.gantt.cols に入れる。キャンセル・閉じるなら捨てる
 let _gmPendingCols=[];
+// v8.33: 編集画面で足した行（id）と消した行（id）。列と同じく「適用」で図に入れ、キャンセル・閉じるなら捨てる
+let _gmPendingRows=[], _gmDelRows=[];
+// v8.33: 編集画面に見せる行＝図の行から消した行を除き、足した行を後ろに
+function ganttModalRowIds(){ return ganttInfoRowIds().filter(r=>!_gmDelRows.includes(r)).concat(_gmPendingRows); }
+// v8.33: 表の入力中の値を控える {列のid:{行のid:{l,v}}}（行・列を足したり消したりして表を描き直すときに入力を消さないため）
+function ganttModalDraft(f){
+  const draft={};
+  f.querySelectorAll('input[data-col]').forEach(inp=>{
+    const dc=draft[inp.dataset.col]||(draft[inp.dataset.col]={});
+    const dr=dc[inp.dataset.row]||(dc[inp.dataset.row]={});
+    dr[inp.dataset.k]=inp.value;
+  });
+  return draft;
+}
 // v8.32: 情報欄の表（左から列1・列2…＝工程表と同じ順・行は上段・下段・右端に「＋ 列を追加」）。
 //   draft＝描き直す前に入力されていた値 {列のid:{r3:{l,v},r4:{l,v}}}（列を足したときに入力を消さないため）。無ければ図の値
+//   v8.33: 行は「行1・行2…」（ganttModalRowIds）。表の下に「＋ 行を追加」、行の見出しに「×」（行を消す・2 行以上のとき）
 function ganttModalColsHtml(n,draft){
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
-  const cols=ganttColList().concat(_gmPendingCols), nc=cols.length;
+  const cols=ganttColList().concat(_gmPendingCols), nc=cols.length, rows=ganttModalRowIds();
   const get=(c,row,k)=>{
     const d=draft&&draft[c.id]&&draft[c.id][row];
     if(d&&d[k]!=null) return d[k];
     if(_gmPendingCols.includes(c)) return '';   // まだ図に無い列（ganttCellVal を呼ぶと n.cells に空の欄を作ってしまう）
+    if(_gmPendingRows.includes(row)) return '';   // v8.33: まだ図に無い行も同じ
     return k==='l'?ganttCellLabel(n,c.id,row):ganttCellVal(n,c.id,row);
   };
   let h=`<div class="gm-field" id="gm-cols-field">`
-    +`<div class="gm-cols-top"><label>情報欄（左の欄と同じ並び。左から 列1・列2…）</label><span class="gm-cols-note">項目名は全部のタスクで共通です</span></div>`
-    +`<div class="gm-cols-wrap"><div class="gm-cols" style="grid-template-columns:40px repeat(${nc},minmax(210px,1fr)) 62px">`
+    +`<div class="gm-cols-top"><label>情報欄（左の欄と同じ並び。左から 列1・列2…、上から 行1・行2…）</label><span class="gm-cols-note">行・列と項目名は全部のタスクで共通です</span></div>`
+    +`<div class="gm-cols-wrap"><div class="gm-cols" style="grid-template-columns:52px repeat(${nc},minmax(210px,1fr)) 62px">`
     +`<div class="gm-cols-corner"></div>`;
   cols.forEach((c,i)=>{ h+=`<div class="gm-cols-ch">列${i+1}</div>`; });
-  h+=`<button type="button" class="gm-cols-add" style="grid-row:1 / span 3;grid-column:${nc+2}" onclick="ganttModalAddCol()" title="右に列を足します（「適用」で工程表へ反映）"><b>＋</b>列を<br>追加</button>`;
-  ['r3','r4'].forEach(row=>{
-    h+=`<div class="gm-cols-rh">${row==='r3'?'上段':'下段'}</div>`;
+  h+=`<button type="button" class="gm-cols-add" style="grid-row:1 / span ${rows.length+1};grid-column:${nc+2}" onclick="ganttModalAddCol()" title="右に列を足します（「適用」で工程表へ反映）"><b>＋</b>列を<br>追加</button>`;
+  rows.forEach((row,ri)=>{
+    h+=`<div class="gm-cols-rh">行${ri+1}`+(rows.length>1?`<button type="button" class="gm-row-del" title="この行を消します（全部のタスクから消えます・「適用」で反映）" onclick="ganttModalDelRow('${row}')">×</button>`:'')+`</div>`;
     cols.forEach(c=>{
       const at=`data-col="${c.id}" data-row="${row}"`;
       h+=`<div class="gm-cols-cell">`
@@ -7709,8 +7838,26 @@ function ganttModalColsHtml(n,draft){
         +`<input type="text" id="gm-col-${c.id}-${row}-v" ${at} data-k="v" placeholder="本文" value="${esc(get(c,row,'v'))}"/></div>`;
     });
   });
-  h+=`</div></div><div class="gm-cols-hint">「＋ 列を追加」を押すと右に列${nc+1}が増えます。「適用」を押したときに工程表へ反映します。</div></div>`;
+  h+=`</div></div><button type="button" class="gm-rows-add" onclick="ganttModalAddRow()" title="下に行を足します（全部のタスクに増えます・「適用」で工程表へ反映）"><span>＋</span> 行を追加</button>`
+    +`<div class="gm-cols-hint">「＋ 列を追加」で右に列${nc+1}、「＋ 行を追加」で下に行${rows.length+1}が増えます。「適用」を押したときに工程表へ反映します。</div></div>`;
   return h;
+}
+// v8.33: 編集画面の「＋ 行を追加」＝入力中の値を控えて表を描き直し、下に行を 1 本足す（図に入れるのは「適用」のとき）
+function ganttModalAddRow(){
+  const n=S.nodes.find(x=>x.id===_ganttEditId), f=document.getElementById('gm-cols-field');
+  if(!n||!f) return;
+  const draft=ganttModalDraft(f), row='ri'+(++S.uid);
+  _gmPendingRows.push(row);
+  f.outerHTML=ganttModalColsHtml(n,draft);
+  document.getElementById('gm-col-c0-'+row+'-l')?.focus();
+}
+// v8.33: 行の「×」＝その行を表から外す（足したばかりの行なら取り消すだけ。図の行なら「適用」で全タスクから消す）
+function ganttModalDelRow(row){
+  const n=S.nodes.find(x=>x.id===_ganttEditId), f=document.getElementById('gm-cols-field');
+  if(!n||!f||ganttModalRowIds().length<=1) return;
+  const draft=ganttModalDraft(f), pi=_gmPendingRows.indexOf(row);
+  if(pi>=0) _gmPendingRows.splice(pi,1); else if(!_gmDelRows.includes(row)) _gmDelRows.push(row);
+  f.outerHTML=ganttModalColsHtml(n,draft);
 }
 // v8.32: 列の数に合わせて編集画面の幅を決める（列 1 本＝約 230px・画面より広ければ画面の幅＝表は横にスクロール）。nc=0 は従来どおり中身なり
 function ganttModalSizeBox(nc){
@@ -7721,22 +7868,18 @@ function ganttModalSizeBox(nc){
 function ganttModalAddCol(){
   const n=S.nodes.find(x=>x.id===_ganttEditId), f=document.getElementById('gm-cols-field');
   if(!n||!f) return;
-  const draft={};
-  f.querySelectorAll('input[data-col]').forEach(inp=>{
-    const dc=draft[inp.dataset.col]||(draft[inp.dataset.col]={});
-    const dr=dc[inp.dataset.row]||(dc[inp.dataset.row]={});
-    dr[inp.dataset.k]=inp.value;
-  });
+  const draft=ganttModalDraft(f);   // v8.33: 行の追加・削除と共用
   const col={id:'gc'+(++S.uid),width:160};   // ganttAddColumn（左上の ⊕）と同じ形
   _gmPendingCols.push(col);
   f.outerHTML=ganttModalColsHtml(n,draft);
   ganttModalSizeBox(ganttColList().length+_gmPendingCols.length);
   const w=document.querySelector('#gm-cols-field .gm-cols-wrap'); if(w) w.scrollLeft=w.scrollWidth;
-  document.getElementById('gm-col-'+col.id+'-r3-l')?.focus();
+  document.getElementById('gm-col-'+col.id+'-'+ganttModalRowIds()[0]+'-l')?.focus();
 }
 function closeGanttModal(){
   document.getElementById('gantt-modal').style.display='none';
   _ganttEditId=null; _ganttEditColor=null; _gmPendingCols=[];   // v8.32: 足しかけの列は捨てる
+  _gmPendingRows=[]; _gmDelRows=[];   // v8.33: 足しかけ・消しかけの行も捨てる
 }
 function confirmGanttEdit(){
   const n=S.nodes.find(x=>x.id===_ganttEditId); if(!n){closeGanttModal();return;}
@@ -7747,8 +7890,12 @@ function confirmGanttEdit(){
   //   編集画面で足した列（_gmPendingCols）は、ここで S.gantt.cols の右端に入れてから保存する（下の snap 1 回＝Ctrl+Z 1 回で戻る）
   if(n.type!=='gantt_summary'){
     const cols=ganttColList(); _gmPendingCols.forEach(c=>cols.push(c)); _gmPendingCols=[];
+    // v8.33: タスク名の項目名（全タスク共通）・消した行・足した行も、ここで図に入れる（同じ snap 1 回＝Ctrl+Z 1 回で戻る）
+    const nl=document.getElementById('gm-name-l'); if(nl) S.gantt.nameLabel=nl.value.trim();
+    _gmDelRows.forEach(r=>ganttDeleteInfoRow(r)); _gmDelRows=[];
+    if(_gmPendingRows.length){ S.gantt.infoRows=ganttInfoRowIds().concat(_gmPendingRows); _gmPendingRows=[]; }
     cols.forEach(col=>{
-      ['r3','r4'].forEach(row=>{
+      ganttInfoRowIds().forEach(row=>{
         const l=document.getElementById('gm-col-'+col.id+'-'+row+'-l');
         const v=document.getElementById('gm-col-'+col.id+'-'+row+'-v');
         if(l||v) ganttSetCell(n,col.id,row,(l?l.value:'').trim(),(v?v.value:'').trim());
@@ -11718,6 +11865,28 @@ function pasteShiftRoute(c,dx,dy,fromN,toN){
   const hz=side?(side==='left'||side==='right'):(Math.abs(b[0]-a[0])>Math.abs(b[1]-a[1]));
   c.midPos+=hz?dx:dy;
 }
+// v8.33: 色見本の行（26×26 の見本＝塗り＋内側に枠の色）＋カスタム色。押すと apply(塗り,枠)。
+//   ツールバーの「色」（showShapeColorMenu）と見出しの編集の凡例項目の色（ganttLegendColorMenu）が同じものを使う
+//   ＝色の選び方をそろえる（ユーザー要望 2026-10-23）。カスタム色の枠は塗りから自動（ganttStrokeFor）
+function colorSwatchRow(palette,cur,defCustom,apply){
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;max-width:200px;align-items:center';
+  palette.forEach(c=>{
+    const stroke=c.stroke||ganttStrokeFor(c.fill);
+    const sw=document.createElement('div');
+    sw.style.cssText=`width:26px;height:26px;border-radius:6px;cursor:pointer;background:${c.fill};box-shadow:inset 0 0 0 2px ${stroke};`;
+    sw.title=c.name;
+    sw.addEventListener('click',ev2=>{ev2.stopPropagation();apply(c.fill,stroke);});
+    row.appendChild(sw);
+  });
+  const custom=document.createElement('input'); custom.type='color'; custom.title='カスタム色';
+  custom.style.cssText='width:30px;height:26px;padding:0;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff';
+  custom.value=(cur&&/^#[0-9a-fA-F]{6}$/.test(cur))?cur:defCustom;
+  custom.addEventListener('click',ev2=>ev2.stopPropagation());
+  custom.addEventListener('change',ev2=>{ev2.stopPropagation();apply(custom.value,ganttStrokeFor(custom.value));});
+  row.appendChild(custom);
+  return row;
+}
 // ── シェイプの色変更メニュー ──
 function showShapeColorMenu(ev){
   const ids=S.sel.filter(id=>S.nodes.some(n=>n.id===id));
@@ -11738,25 +11907,8 @@ function showShapeColorMenu(ev){
   };
   // スウォッチ行（フェーズのみ＝濃色パレット／他＝GANTT_COLORS）＋カスタム色ピッカー（v4.30）
   const isPhaseSel = ids.length>0 && ids.every(id=>S.nodes.find(n=>n.id===id)?.type==='gantt_summary');
-  const palette = isPhaseSel ? GANTT_PHASE_COLORS : GANTT_COLORS;
-  const row=document.createElement('div');
-  row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;max-width:200px;align-items:center';
-  palette.forEach(c=>{
-    const stroke=c.stroke||ganttStrokeFor(c.fill);
-    const sw=document.createElement('div');
-    sw.style.cssText=`width:26px;height:26px;border-radius:6px;cursor:pointer;background:${c.fill};box-shadow:inset 0 0 0 2px ${stroke};`;
-    sw.title=c.name;
-    sw.addEventListener('click',ev2=>{ev2.stopPropagation();apply(c.fill,stroke);});
-    row.appendChild(sw);
-  });
-  const custom=document.createElement('input'); custom.type='color'; custom.title='カスタム色';
-  custom.style.cssText='width:30px;height:26px;padding:0;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff';
   const first=S.nodes.find(n=>n.id===ids[0]);
-  custom.value=(first&&first.color&&/^#[0-9a-fA-F]{6}$/.test(first.color))?first.color:(isPhaseSel?'#0e7490':'#3b82f6');
-  custom.addEventListener('click',ev2=>ev2.stopPropagation());
-  custom.addEventListener('change',ev2=>{ev2.stopPropagation();apply(custom.value,ganttStrokeFor(custom.value));});
-  row.appendChild(custom);
-  dlg.appendChild(row);
+  dlg.appendChild(colorSwatchRow(isPhaseSel?GANTT_PHASE_COLORS:GANTT_COLORS, first&&first.color, isPhaseSel?'#0e7490':'#3b82f6', apply));
   const reset=document.createElement('button'); reset.className='lc-cancel';
   reset.textContent='標準の色に戻す';
   reset.addEventListener('click',ev2=>{ev2.stopPropagation();apply(null,null);});
@@ -15585,6 +15737,8 @@ async function expExcel(){
   const cols=ganttColList();                       // 情報列 [{id,width}]（c0＝概要/担当にbind）
   const numPairs=Math.max(cols.length,2);          // 工程行に進捗率ペアが要るため最低2ペア
   const leftCols=1+numPairs*2;                     // A=フェーズ ＋ 各ペア(項目名,本文)＝左情報欄の総列
+  const infoRowIds=ganttInfoRowIds(), rowsPerTask=2+infoRowIds.length;   // v8.33: 1 タスク＝名称・工程＋情報欄の行（従来は 4 行固定）
+  const labelBorders=[];   // v8.33: 項目名のセルの右の線（全体の罫線を引いた後に引き直す＝細い線で上書きされないように）
 
   // ── 段階2＋v6.07: 時間軸の列を「日ベース」に細分化（Excel出力のみ。画面/PDFは不変）──
   //   刻み＝日:1日 / 週:1日 / 月:2日（月は月ごとにリセット＝各月1日から数え直し、列が月境をまたがない）。
@@ -15651,8 +15805,9 @@ async function expExcel(){
   for(let i=0;i<numPairs;i++){
     const col=cols[i];
     let maxLabelPx=col?ganttLabelW(ganttDefLabel(col.id,'r3')):0;
-    if(col){ rows.forEach(n=>{ maxLabelPx=Math.max(maxLabelPx, ganttLabelW(ganttCellLabel(n,col.id,'r3')), ganttLabelW(ganttCellLabel(n,col.id,'r4'))); }); }
-    if(i===0) maxLabelPx=Math.max(maxLabelPx, ganttLabelW('工程'));
+    // v8.33: 行は ganttInfoRowIds の全部（項目名は全タスク共通）。列1 はタスク名の項目名も
+    if(col){ infoRowIds.forEach(row=>{ maxLabelPx=Math.max(maxLabelPx, ganttLabelW(ganttColLabel(col.id,row))); }); }
+    if(i===0) maxLabelPx=Math.max(maxLabelPx, ganttLabelW('工程'), ganttLabelW(ganttNameLabel()));
     if(i===1) maxLabelPx=Math.max(maxLabelPx, ganttLabelW('進捗率'));
     const labelW=Math.max(5,Math.min(18, excelPxToW(maxLabelPx)+1));
     const colPx=col?(col.width||120):120;
@@ -15749,25 +15904,35 @@ async function expExcel(){
   }
 
   // ── データ（段階1の左情報欄: 1タスク=4行。HR ぶん下げて配置）──
+  //   v8.33: 1 タスク＝2＋情報欄の行数（名称・工程・行1・行2…）。項目名のセルは画面の帯と同じ色（ganttBandColor）で塗り、
+  //   横位置を均等割り付けにする（ユーザー決定 2026-10-23）。名称の行も「項目名｜本文」に分ける（本文は列に分けず結合）
   const baseRowOf={};
   let r=dataTop;
+  const labelCell=(cell,txt,bc)=>{ cell.value=txt||'';
+    if(!String(txt||'').trim()) return;
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:excelHexToArgb(bc.fill)}};
+    cell.font={name:FONT,bold:true,size:10,color:{argb:excelHexToArgb(bc.text)}};
+    cell.alignment={vertical:'middle',horizontal:'distributed',indent:1};
+    labelBorders.push([cell,bc.line]);
+  };
   rows.forEach(n=>{
     const base=r; baseRowOf[n.id]=base;
-    const isMile=n.type==='gantt_milestone';
-    ws.mergeCells(base,2,base,leftCols);           // 行1 名称（情報列ぶん横結合・太字）
-    const nc=ws.getCell(base,2); nc.value=n.text||''; nc.font={name:FONT,bold:true,size:11};
+    const isMile=n.type==='gantt_milestone', bc=ganttBandColor(n);
+    labelCell(ws.getCell(base,2),ganttNameLabel(),bc);   // 行1 項目名｜名称（本文は情報列ぶん横結合・太字）
+    ws.mergeCells(base,3,base,leftCols);
+    const nc=ws.getCell(base,3); nc.value=n.text||''; nc.font={name:FONT,bold:true,size:11};
     nc.alignment={vertical:'middle',horizontal:'left',wrapText:true};
-    ws.getCell(base+1,2).value='工程';              // 行2 工程｜日付（＋進捗率｜％）
+    labelCell(ws.getCell(base+1,2),'工程',bc);       // 行2 工程｜日付（＋進捗率｜％）
     ws.getCell(base+1,3).value=isMile?ganttDispDate(n.date):(ganttDispDate(n.startDate)+'～'+ganttDispDate(n.endDate));
-    if(!isMile){ ws.getCell(base+1,4).value='進捗率'; ws.getCell(base+1,5).value=Math.max(0,Math.min(100,n.progress||0))+'％'; }
-    ['r3','r4'].forEach((row,ri)=>{                  // 行3・行4 各情報列の 項目名｜本文
+    if(!isMile){ labelCell(ws.getCell(base+1,4),'進捗率',bc); ws.getCell(base+1,5).value=Math.max(0,Math.min(100,n.progress||0))+'％'; }
+    infoRowIds.forEach((row,ri)=>{                  // 行3〜 各情報列の 項目名｜本文
       cols.forEach((col,ci)=>{
-        ws.getCell(base+2+ri,2+ci*2).value=ganttCellLabel(n,col.id,row);
+        labelCell(ws.getCell(base+2+ri,2+ci*2),ganttCellLabel(n,col.id,row),bc);
         const vc=ws.getCell(base+2+ri,3+ci*2); vc.value=ganttCellVal(n,col.id,row);
         vc.alignment={vertical:'top',horizontal:'left',wrapText:true};
       });
     });
-    r+=4;
+    r+=rowsPerTask;
   });
   const lastRow=r-1;
 
@@ -15776,7 +15941,7 @@ async function expExcel(){
     const members=ganttPhaseMembers(p.id).filter(m=>baseRowOf[m.id]!=null);
     if(!members.length) return;
     let top=Infinity,bot=-Infinity;
-    members.forEach(m=>{ top=Math.min(top,baseRowOf[m.id]); bot=Math.max(bot,baseRowOf[m.id]+3); });
+    members.forEach(m=>{ top=Math.min(top,baseRowOf[m.id]); bot=Math.max(bot,baseRowOf[m.id]+rowsPerTask-1); });   // v8.33: 1 タスクの行数は可変
     if(bot>top) ws.mergeCells(top,1,bot,1);
     const cell=ws.getCell(top,1); cell.value=p.text||'';
     const fill=p.color||SD.gantt_summary.fill;
@@ -15823,6 +15988,7 @@ async function expExcel(){
   rows.forEach(n=>{ const base=baseRowOf[n.id];   // タスク境界＝各タスク先頭行の上端を細実線
     for(let cc=1; cc<=totalCols; cc++){ const c=ws.getCell(base,cc); c.border=Object.assign({},c.border,{top:thin}); }
   });
+  labelBorders.forEach(([c,line])=>{ c.border=Object.assign({},c.border,{right:{style:'thin',color:{argb:excelHexToArgb(line)}}}); });   // v8.33: 項目名と本文の境目の線
   for(let cc=1; cc<=totalCols; cc++){ const c=ws.getCell(BAND,cc); c.border=Object.assign({},c.border,{bottom:med}); }   // v6.02: 帯下端
   for(let cc=1; cc<=totalCols; cc++){ const c=ws.getCell(BAND+HR,cc); c.border=Object.assign({},c.border,{bottom:med}); }   // ヘッダー下端
   for(let cc=1; cc<=totalCols; cc++){ let c=ws.getCell(1,cc); c.border=Object.assign({},c.border,{top:med});
@@ -15832,7 +15998,7 @@ async function expExcel(){
 
   // ── v8.00: 凡例（最下部・色見本＋ラベル）──
   {
-    const legItems=ganttLegendItems();
+    const legItems=ganttLegendItems({excel:true});   // v8.33: Excel は週の目盛りでも土日を塗る＝「土日・休工日」の有無の判定が画面と違う
     if(legItems.length){
       const lr=lastRow+2;
       const lc0=ws.getCell(lr,1); lc0.value='凡例'; lc0.font={name:FONT,bold:true,size:11,color:{argb:'FF334155'}}; lc0.alignment={vertical:'middle',horizontal:'left',indent:1};
@@ -17235,8 +17401,29 @@ function ganttHeadSetRow(i,f,v){ ganttEnsureHeader(); const r=S.gantt.header.row
 function ganttHeadSetSlot(i,f,v){ ganttEnsureHeader(); const s=(S.gantt.header.approval.slots||[])[i]; if(s){ s[f]=v; render(); } }
 function ganttLegendSet(key,val){ ganttEnsureHeader(); S.gantt.legend[key]=val; render(); }
 function ganttLegendSetOverride(key,val){ ganttEnsureHeader(); S.gantt.legend.overrides[key]=val; render(); }
-function ganttLegendAddExtra(){ ganttEnsureHeader(); S.gantt.legend.extra.push({label:'工種名',color:'#dcfce7',stroke:'#22c55e'}); render(); }
-function ganttLegendSetExtra(i,f,v){ ganttEnsureHeader(); const ex=S.gantt.legend.extra[i]; if(ex){ ex[f]=v; if(f==='color')ex.stroke=v; render(); } }
+function ganttLegendAddExtra(){ ganttEnsureHeader(); S.gantt.legend.extra.push({label:'工種名',color:'#dcfce7',stroke:'#16a34a'}); render(); }   // v8.33: 色の一覧の「緑」と同じ組
+function ganttLegendSetExtra(i,f,v){ ganttEnsureHeader(); const ex=S.gantt.legend.extra[i]; if(ex){ ex[f]=v; render(); } }
+// v8.33: 凡例項目の色は塗りと枠の組で入れる。従来は input type=color で選び、枠の色＝塗りの色になっていた
+//   （タスクの「薄い塗り＋濃い枠」と見本の見た目が合わない）
+function ganttLegendSetExtraColor(i,fill,stroke){ ganttEnsureHeader(); const ex=S.gantt.legend.extra[i]; if(ex){ ex.color=fill; ex.stroke=stroke; render(); ganttHeadDlgRefresh(); } }
+// v8.33: 凡例項目の色を選ぶポップアップ＝ツールバーの「色」（showShapeColorMenu）と同じ作り（ユーザー要望 2026-10-23）。
+//   #lane-choice の重なり順（1000）は見出しの編集（2000）より下なので、この画面から開くときだけ上へ出す
+function ganttLegendColorMenu(ev,i){
+  ev.stopPropagation(); ganttEnsureHeader();
+  const ex=S.gantt.legend.extra[i]; if(!ex) return;
+  if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;}
+  document.getElementById('lane-choice')?.remove();
+  const dlg=document.createElement('div'); dlg.id='lane-choice'; dlg.style.zIndex='2100';
+  const btn=ev.currentTarget.getBoundingClientRect();
+  dlg.style.left=Math.max(4,btn.left)+'px'; dlg.style.top=(btn.bottom+6)+'px';
+  const title=document.createElement('div'); title.className='lc-title'; title.textContent='凡例の色:'; dlg.appendChild(title);
+  const closeDlg=()=>{dlg.remove();if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;}};
+  dlg.appendChild(colorSwatchRow(GANTT_COLORS, ex.color, '#dcfce7', (fill,stroke)=>{ closeDlg(); ganttLegendSetExtraColor(i,fill,stroke); }));
+  document.body.appendChild(dlg);
+  { const _r=dlg.getBoundingClientRect();
+    if(_r.bottom>window.innerHeight-6) dlg.style.top=Math.max(4,btn.top-_r.height-6)+'px'; }   // 下に入らなければボタンの上へ
+  _laneChoiceRemoveClose=bindOutsideClose(dlg,closeDlg);
+}
 function ganttLegendRemoveExtra(i){ ganttEnsureHeader(); S.gantt.legend.extra.splice(i,1); render(); }
 // 入力中（テキスト入力にフォーカス）は動的リストを作り直さない＝キャレット/フォーカス維持
 function ganttHeadEditing(){ const a=document.activeElement, b=document.getElementById('gantt-head-body'); return !!(a&&b&&b.contains(a)&&a.tagName==='INPUT'&&a.type!=='checkbox'); }
@@ -17246,7 +17433,7 @@ function ganttHeadSyncPanel(){
   const h=S.gantt.header, lg=S.gantt.legend;
   const setC=(id,v)=>{const el=document.getElementById(id); if(el&&document.activeElement!==el)el.checked=!!v;};
   setC('gh-show',h.show); setC('gh-date',h.showDate); setC('gh-appr',h.approval&&h.approval.show);
-  setC('gl-show',lg.show); setC('gl-auto',lg.auto);
+  setC('gl-show',lg.show); setC('gl-auto',lg.auto!==false);   // v8.33: ganttLegendItems と同じ判定（未設定＝ON）
   ganttHeadDlgRefresh();
 }
 // ===== 微修正(v8.00据置): 見出し編集ダイアログ（ダブルクリックで開く・幅広入力） =====
@@ -17295,13 +17482,14 @@ function ganttHeadDlgBody(){
   // 凡例
   html+=`<hr class="ghm-hr"><div class="ghm-inline">`
     +`<label class="ghm-chk"><input type="checkbox" ${lg.show?'checked':''} onchange="ganttLegendSet('show',this.checked)"> 凡例を表示</label>`
-    +`<label class="ghm-chk"><input type="checkbox" ${lg.auto?'checked':''} onchange="ganttLegendSet('auto',this.checked)"> 図から自動生成</label></div>`;
+    +`<label class="ghm-chk"><input type="checkbox" ${lg.auto!==false?'checked':''} onchange="ganttLegendSet('auto',this.checked)"> 色・記号から自動生成</label></div>`;   // v8.33: サイドバーと同じ名前・同じ判定に
   if(lg.show){
     let li='';
     ganttLegendItems().forEach(it=>{ if(String(it.key).indexOf('extra')===0)return;
-      const sw=it.kind==='shade'?'#eef2f6':(it.fill||'#ffffff');
-      li+=`<div class="ghm-row"><span class="ghm-sw" style="background:${sw}"></span><input class="ghm-in ghm-rv" type="text" value="${he(it.label)}" oninput="ganttLegendSetOverride('${it.key}',this.value)"></div>`; });
-    (lg.extra||[]).forEach((ex,i)=>{ li+=`<div class="ghm-row"><input type="color" class="ghm-color" value="${ex.color||'#dcfce7'}" oninput="ganttLegendSetExtra(${i},'color',this.value)"><input class="ghm-in ghm-rv" type="text" value="${he(ex.label)}" placeholder="工種・業者名" oninput="ganttLegendSetExtra(${i},'label',this.value)"><button class="ghm-ic del" title="削除" onclick="ganttLegendRemoveExtra(${i})">×</button></div>`; });
+      const sw=it.kind==='shade'?'#eef2f6':(it.fill||'#ffffff'), sk=it.kind==='shade'?'#e2e8f0':(it.stroke||'#cbd5e1');   // v8.33: 見本に枠の色も
+      li+=`<div class="ghm-row"><span class="ghm-sw" style="background:${sw};border-color:${sk}"></span><input class="ghm-in ghm-rv" type="text" value="${he(it.label)}" oninput="ganttLegendSetOverride('${it.key}',this.value)"></div>`; });
+    // v8.33: 色は見本のボタン→ツールバーの「色」と同じポップアップ（ganttLegendColorMenu）
+    (lg.extra||[]).forEach((ex,i)=>{ li+=`<div class="ghm-row"><button type="button" class="ghm-lgc" title="色を選ぶ" onclick="ganttLegendColorMenu(event,${i})"><span style="background:${ex.color||'#dcfce7'};box-shadow:inset 0 0 0 2px ${ex.stroke||'#16a34a'}"></span>▼</button><input class="ghm-in ghm-rv" type="text" value="${he(ex.label)}" placeholder="工種・業者名" oninput="ganttLegendSetExtra(${i},'label',this.value)"><button class="ghm-ic del" title="削除" onclick="ganttLegendRemoveExtra(${i})">×</button></div>`; });
     html+=`<div class="ghm-sub">凡例ラベルの上書き・工種色の追加</div>`+li+`<button class="ghm-add" onclick="ganttLegendAddExtra()">＋ 凡例項目を追加（工種色分け等）</button>`;
   }
   return html;
