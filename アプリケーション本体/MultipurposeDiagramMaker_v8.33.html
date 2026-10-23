@@ -2,6 +2,250 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<!-- ===== AI作図の手引き（MultipurposeDiagramMaker）=====
+
+この手引きは、AI がこのファイルだけを手がかりに図面を作るための説明です。ブラウザの画面には表示されません。
+書いてあるのは「図面の作り方」だけです。アプリの改修のしかたは書いていません。
+
+【1】このファイルの仕組み
+
+- ブラウザだけで動く図面作成ツールです。HTML 1 ファイルで完結し、インターネット接続もサーバーも要りません。
+- 保存ファイル（アプリの「上書き保存」「名前をつけて保存」で作る図のファイル）は、このファイルの写しに
+  「図のデータ」（JSON 1 つ）を足したものです。保存ファイルをブラウザで開くと図が表示され、そのまま編集・印刷（PDF）・
+  PNG・Excel（工程表だけ）に出せます。
+- つまり、AI が図面を作る＝このファイルの写しに図のデータを差し込んだ HTML ファイルを作る、ということです。
+
+【2】手順
+
+1) 図のデータを JSON で書く（【3】〜【7】）。
+2) このファイルを丸ごと写し、この手引きの最後の行（このコメントを閉じる行）のすぐ次の行に、次の 1 行を入れる。
+       <script id="swimlane-state">window.__SWIMLANE_STATE__ = （ここに図のデータの JSON）;</script>
+   - 入れる場所は「この手引きのすぐ後ろ」です。ファイルの中には同じ形の閉じタグなどが JavaScript の文字列としても
+     出てくるので、文字列の置き換えで別の場所を探さないでください。
+   - 図のデータは正しい JSON にします（コメントや末尾のカンマは不可。ブラウザでは開けても、アプリの「インポート」で読めません）。
+   - JSON の中の「<」はすべて、6 文字の「\u003c」（バックスラッシュ・u・0・0・3・c）に置き換えてから入れます
+     （文字の中の「</script>」で HTML の読み取りが崩れないように。下の Python の例の replace がこれを行います）。
+3) ファイル名を付ける（例「倉庫改修工事_工程表.html」。拡張子は .html）。
+4) できればブラウザで開いて確かめる（【9】）。
+
+このファイルは約 2MB あり、チャットの返答として全文を書き出すことはできません。プログラムで写して差し込みます。
+Python の例（ほかの言語でも同じ手順です）:
+
+    import json
+    src = open('（このファイルの名前）.html', encoding='utf-8', newline='').read()
+    mark = '===== AI作図の手引き ' + 'ここまで ====='          # 手引きの最後の行の目印（2 つに分けて書いているのは、この例の文字自体を目印と取り違えないため）
+    pos = src.index('\n', src.index(mark)) + 1                  # 最後の行の次の行の頭
+    data = { ... }                                              # 図のデータ（【3】〜【7】）
+    js = json.dumps(data, ensure_ascii=False).replace('<', '\\u003c')
+    tag = '<script id="swimlane-state">window.__SWIMLANE_STATE__ = ' + js + ';</script>\n'
+    open('倉庫改修工事_工程表.html', 'w', encoding='utf-8', newline='').write(src[:pos] + tag + src[pos:])
+
+ファイルを作れない AI（チャットだけ）は【10】の方法を使ってください。
+
+【3】図のデータの全体（いちばん外側の項目）
+
+  diagramType  必須。図の種類（【5】の表の左の名前。例 "gantt"）
+  diagramName  図の名称。画面上部の名称欄・印刷の見出し・工程表の工事名に出る
+  finishOnOpen true にすると、開いたときにアプリが一度だけ図を仕上げる（【4】）。座標を書かないなら必ず true
+  nodes        必須。シェイプの配列
+  edges        線の配列
+  lanes        レーンの配列（swimlane・bpmn だけ・必須。【6】）
+  orientation  "vertical"（既定・上から下へ流れる）か "horizontal"（左から右へ流れる）。swimlane・bpmn・flowchart・statechart で効く
+  gantt        工程表の設定（gantt だけ。【7】）
+  mindLayout   "radial"（既定・中心から放射状）か "tree"（右へ広がる木）。mindmap だけ
+  これ以外（印刷の用紙など）は書きません。アプリが既定の値で埋めます。
+
+シェイプ（nodes の要素）の共通の項目
+
+  id       必須。図の中で重ならない文字列（例 "n1"）。線はこの id でつなぐ
+  type     必須。シェイプの種類（【5】）
+  text     表示する文字。改行は \n
+  lid      シェイプが入るレーンの id（swimlane・bpmn では必須）
+  x y w h  左上の座標と幅・高さ（px）。仕上げを使うなら書かない。w・h はアプリが文字の量に合わせて直す（書いても変わる）。
+           幅を決めたいときは manualW に幅の数を書く（例 "manualW":150。その幅で折り返し、高さは文字の行数に合わせて伸びる）
+  color    塗りの色（"#rrggbb"）。stroke は枠の色。省くと種類ごとの既定の色
+  dashed   true で枠を点線にする（「省略できる工程」などに使う）
+  fontSize 文字の大きさ（px・既定 12）
+
+線（edges の要素）の共通の項目
+
+  from to  必須。つなぐシェイプの id（矢印は to の側に付く）
+  label    線に付ける文字（例 "はい"）
+  dashed   true で点線にする
+  id       省いてよい（アプリが振る）
+  曲がり方（経路）は書きません。アプリが自動で引きます。
+
+【4】仕上げ（finishOnOpen: true）
+
+開いたときに、アプリが一度だけ次のことを行います。人がそのファイルを保存し直すと、この印は残りません（次に開いても並べ直しません）。
+
+  swimlane・bpmn  線のつながりから工程の順を決め、各シェイプを自分のレーンの中に上から並べる（アプリの「整列」と同じ）
+  flowchart・statechart・er・uml  線のつながりから段を決めて並べる
+  orgchart        線（上の人→下の人）から木の形に並べる
+  mindmap         中心から mindLayout の形に並べる
+  sequence        ライフラインを nodes の順に左から、メッセージを edges の順に上から並べる
+  gantt           色を書いていないタスクに、所属するフェーズの色を写す（行の並びは nodes の順なので並べ直さない）
+
+仕上げで並べないもの: グループ枠（group_box・org_group）、複数レーンの帯（crosslane・crosslane_sys_input）、
+活性区間（activation）、線でつながっていない書類・データ・補足情報（注記として近くの工程に重なってしまう）。
+これらを使うときは、仕上げを使わずに座標を自分で書く（【8】）か、人があとから置きます。
+線でつながっている書類・データ・補足情報は、工程の一つとして並べます。
+
+【5】図の種類と使えるシェイプ（type：画面での名前）
+
+  swimlane   スイムレーン図（レーンあり）
+             rect：プロセス／note：プロセス(説明有)／sys_input：システム入力／sys_input_desc：システム入力(説明有)／
+             diamond：判断／diamond_desc：判断(説明有)／terminal：開始/終了／parallelogram：データ／doc：書類／
+             supplement：補足情報／crosslane：複数レーンプロセス／crosslane_sys_input：複数レーンシステム入力／group_box：グループ
+  flowchart  フローチャート（レーンなし）。シェイプは swimlane と同じ（crosslane の画面での名前は「マルチプロセス」）
+  bpmn       プロセスフロー（BPMN・レーンあり）
+             rect：タスク／note：サブプロセス／sys_input・sys_input_desc／gateway_xor：排他ゲートウェイ／
+             gateway_par：並行ゲートウェイ／event：イベント／parallelogram・doc・supplement・crosslane・crosslane_sys_input・group_box
+  statechart 状態遷移図: state：状態／state_detail：状態(詳細)／initial：開始（黒丸）／final：終了（二重丸）／diamond：分岐
+  er         ER図: entity：エンティティ（テーブル）／er_relation：リレーション（ひし形）
+  orgchart   樹状図（組織図など）: org_node：ノード（役職の見出し付き）／org_node_plain：ノード（1 行）／org_group：グループ
+  sequence   シーケンス図: lifeline：ライフライン／activation：活性区間
+  gantt      ガントチャート（工程表）: gantt_summary：フェーズ／gantt_task：タスク／gantt_milestone：マイルストーン
+  mindmap    マインドマップ: mind_root：中心トピック（1 つだけ）／mind_topic：問題／mind_action：対策／mind_note：補足情報
+  uml        UMLクラス図: uml_class：クラス／uml_interface：インターフェース
+
+シェイプごとの追加の項目
+
+  note・sys_input_desc・diamond_desc・state_detail（説明有）  text＝名称、note＝説明欄の文字
+  event（BPMN）  variant に "start"（開始・緑）／"mid"（中間・黄）／"end"（終了・赤）。text は円の下に出る名前
+  entity（ER）   text は書かず、sections に
+                   [{"text":"テーブル名","style":"header"},{"style":"list","rows":["列名: 型 [PK]","列名: 型 [FK]"]}]
+  uml_class・uml_interface  text は書かず、sections に
+                   [{"text":"クラス名","style":"header"},{"style":"list","rows":["+属性: 型"]},{"style":"list","rows":["+操作()"]}]
+  org_node       text は書かず、sections に
+                   [{"text":"役職名","style":"header"},{"style":"table","cols":1,"rows":[["氏名"]]}]
+                   （2 列の表にするなら "cols":2 と "rows":[["氏名","山田"],["内線","1234"]]）
+  org_node_plain text に 1 行（氏名など）
+  mind_topic・mind_action・mind_note  次の属性を付けられる:
+                   status（"agreed" 合意済／"open" 未決／"objection" 反対あり）、
+                   importance（重要度）・confidence（確信度）・effort（工数）はそれぞれ "high"／"mid"／"low"
+
+線の、図の種類ごとの項目
+
+  swimlane・flowchart・bpmn  label に分岐の条件など
+  statechart  label に遷移のきっかけ
+  er          label に関係の名前、fromLabel・toLabel に多重度（"1"／"N"／"0..1"／"0..N" など）
+  uml         umlType に "generalization"（継承: from＝子・to＝親）／"realization"（実装: from＝クラス・to＝インターフェース）／
+              "dependency"（依存）／"association"（関連）／"aggregation"（集約: from＝全体の側）／"composition"（コンポジション: from＝全体の側）
+  sequence    msgType に "sync"（同期・実線）／"async"（非同期）／"reply"（応答・破線）。label にメッセージ
+  orgchart・mindmap  from＝親（上の人・中心の側）、to＝子
+  gantt       タスクどうしの依存の矢印。depType に "FS"（前の終了→次の開始・既定）／"SS"／"FF"／"SF"
+
+【6】レーン（swimlane・bpmn）
+
+  "lanes": [{"id":"L1","name":"営業"},{"id":"L2","name":"経理"}]
+  配列の順に左から並びます（orientation が "horizontal" なら上から）。各シェイプの lid に、そのシェイプが入るレーンの id を書きます。
+  w（レーンの幅・px・既定 220）、bg（背景の色）、hd（見出しの色）は省いてよい（色は順に自動で付く）。
+
+【7】ガントチャート（工程表）
+
+- 行の順＝nodes の中のタスクとマイルストーンの順（上から）。フェーズに入るタスクとマイルストーンは、nodes の中で続けて並べる
+  （間に別のフェーズのものを挟まない）。フェーズ（gantt_summary）は、そのフェーズのタスクの前に置く。
+- gantt_summary（フェーズ）: text＝フェーズ名、color＝フェーズの色（濃い色。例 "#0e7490" ティール／"#1e3a8a" 紺／
+  "#15803d" 濃緑／"#6d28d9" 濃紫／"#b45309" 茶／"#b91c1c" 濃赤）。
+- gantt_task（タスク）: text＝タスク名、startDate・endDate＝開始日と終了日（"YYYY-MM-DD"・終了日もその日を含む）、
+  phaseId＝フェーズの id、progress＝進捗（0〜100）、desc＝概要、assignee＝担当。
+  color と stroke でバーの色（例 塗り "#dcfce7"・枠 "#16a34a" で緑）。仕上げを使い色を省くと、フェーズの色が付く。
+- gantt_milestone（マイルストーン）: text、date（"YYYY-MM-DD"）、phaseId。色を書かなければオレンジのひし形
+  （仕上げでもフェーズの色は付かない。変えるなら color と stroke を書く）。
+- 依存の矢印: edges に {"from":"t1","to":"t2","depType":"FS"}。
+- 工事名＝diagramName（見出し欄の大きな文字）。
+- gantt（設定。どれも省いてよい）:
+    scale      "day"（既定）／"week"／"month"／"hour"。日単位は 1 日が 32px なので、期間が 2 か月を超えると横に長くなり、
+               画面では右端まで横にスクロールして見ることになる（印刷は用紙に合わせて縮む）。長い期間は "week" も考える
+    startDate・endDate  時間軸の範囲（"YYYY-MM-DD"）。省くとタスクの日付の最初と最後
+    header     見出し欄。{"show":true,"rows":[{"label":"工事場所","value":"栃木県足利市"},{"label":"施工者","value":"○○建設"}],
+               "showDate":true,"approval":{"show":true}}
+               rows を省くと 6 行（工事場所・発注者・施工者・工期・担当・版数）が空欄で出る。approval は承認・確認・作成の押印欄
+    holidays   休日の網掛け。{"sat":true,"sun":true,"jp":true}（土・日・祝日。既定はすべて true）
+    legend     凡例。{"show":true}（既定は表示・色から自動で作る）
+- 情報欄の列を足す（概要・担当のほかに「工区」「業者」など）:
+    gantt に "cols":[{"id":"c0","width":240},{"id":"c1","width":160,"r3Label":"工区","r4Label":"業者"}] と書き、
+    各タスクに "cells":{"c1":{"r3":{"v":"A工区"},"r4":{"v":"○○塗装"}}} と書く。
+    r3 は列の 1 行目、r4 は 2 行目。1 行だけ使うなら r3 だけを書く（r4 の項目名と本文は書かない）。
+    1 列目（c0）の 2 行は desc（概要）と assignee（担当）で、項目名は "r3Label"・"r4Label" で変えられる。
+
+【8】座標を自分で書くとき（仕上げを使わないとき）
+
+- 単位は px。x・y はシェイプの左上。キャンバスは右と下に必要なだけ広がる。
+- 縦向きのレーン図: レーンは左から幅 w（既定 220）ずつ並ぶ（1 本目は x＝0〜220）。上端に高さ 44 の見出し帯がある。
+  シェイプはレーンの中（左右に 10 以上の余白）に置き、y は 44 より下。工程の中心を y＝44＋80×k の線にそろえると、
+  アプリの整列と同じ見た目になる。横向き（"horizontal"）は x と y を入れ替えて考える。
+- レーンの無い図: 左上（0, 0）から自由に置く。
+- 既定の大きさ（幅×高さ）: rect 120×37／note 140×65／diamond 180×59／terminal 110×31／parallelogram 80×37／
+  doc 60×40／supplement 130×40／sys_input 120×37／event 40×40／gateway_xor・gateway_par 50×50／state 130×45／
+  initial・final 30×30／entity 160×90／uml_class 180×120／org_node 126×48／lifeline 100×40／group_box 300×200
+- group_box（グループ枠）: 囲むシェイプを含む矩形を x・y・w・h で書く。text が枠の見出し。上端から 40 は見出しの帯なので、
+  中のシェイプは枠の上端より 40 以上下に置く。
+- crosslane・crosslane_sys_input（複数レーンの帯）: lid を書かず、fromLid と toLid（帯がかかる最初と最後のレーンの id）と、
+  mainPos（縦向きなら帯の上端の y）を書く。
+- 書類・データ・補足情報（注記）: 説明したい工程の横などに、重ねて置いてよい。線でつながなくてよい。
+- sequence の手で書くときの位置: ライフラインは y＝20・x を 150 ずつ、メッセージは線に msgY（y 座標。104 から 46 ずつ）。
+
+【9】確かめ方
+
+- ブラウザで開くと図が出る。何も出ない、または「新しい図を作成」（図の種類を選ぶ画面）が出る＝図のデータが読めていない
+  （差し込む場所、または JSON の誤り）。
+- 開発者ツールのコンソールにエラーが出ていないか見る。
+- 図が出たら、文字・つながり・並び順を目で確かめる。見えないブラウザ（Puppeteer など）で開けるなら画面写真を撮る。
+  開いた直後に「上書き先を決めますか？」の小さな窓が出ることがあるが、図とは関係ない（「あとで決める」で閉じる）。
+- よくある誤り: id の重複／線の from・to の打ち間違い／レーン図での lid の書き忘れ／日付の形（"2026-11-02" の形にする）／
+  JSON の末尾のカンマ／フェーズのタスクが nodes の中で離れている。
+
+【10】ファイルを作れない AI（チャットだけ）の場合
+
+アプリの「テキスト作図」（メニューバーの「ファイル」の中）に貼る文を書き、人に貼ってもらいます。対応している書き方:
+  - Mermaid: flowchart（フローチャート）・sequenceDiagram・stateDiagram・erDiagram・classDiagram・gantt
+  - 字下げした箇条書き・OPML・FreeMind（マインドマップ）
+  - CSV: 樹状図（1 行目「役職,氏名,上司」）・ガント（1 行目「フェーズ,タスク,開始,終了,担当,進捗」）
+この方法では、色・工程表の見出し欄と追加の列・スイムレーン図のレーンは作れません。必要なら、図ができたあとに人が画面で直します。
+
+【11】例
+
+例1 工程表（gantt）
+{"diagramType":"gantt","diagramName":"倉庫改修工事","finishOnOpen":true,
+ "gantt":{"scale":"day","header":{"rows":[{"label":"工事場所","value":"栃木県足利市"},{"label":"施工者","value":"○○建設"}]},
+          "cols":[{"id":"c0","width":240},{"id":"c1","width":150,"r3Label":"工区","r4Label":"業者"}]},
+ "nodes":[
+  {"id":"p1","type":"gantt_summary","text":"準備工","color":"#0e7490"},
+  {"id":"m1","type":"gantt_milestone","text":"着工","date":"2026-11-02","phaseId":"p1"},
+  {"id":"t1","type":"gantt_task","text":"測量","startDate":"2026-11-02","endDate":"2026-11-06","progress":100,"phaseId":"p1","desc":"現況測量","assignee":"佐藤"},
+  {"id":"t2","type":"gantt_task","text":"仮設工事","startDate":"2026-11-09","endDate":"2026-11-13","phaseId":"p1","assignee":"鈴木",
+   "cells":{"c1":{"r3":{"v":"全体"},"r4":{"v":"○○リース"}}}},
+  {"id":"p2","type":"gantt_summary","text":"本工事","color":"#1e3a8a"},
+  {"id":"t3","type":"gantt_task","text":"屋根の葺き替え","startDate":"2026-11-16","endDate":"2026-12-04","phaseId":"p2","assignee":"田中",
+   "cells":{"c1":{"r3":{"v":"A工区"},"r4":{"v":"○○板金"}}}},
+  {"id":"t4","type":"gantt_task","text":"外壁塗装","startDate":"2026-12-07","endDate":"2026-12-18","phaseId":"p2",
+   "cells":{"c1":{"r3":{"v":"B工区"},"r4":{"v":"○○塗装"}}}},
+  {"id":"m2","type":"gantt_milestone","text":"完成検査","date":"2026-12-22","phaseId":"p2"}],
+ "edges":[{"from":"t1","to":"t2","depType":"FS"},{"from":"t3","to":"t4"}]}
+
+例2 スイムレーン図（swimlane）
+{"diagramType":"swimlane","diagramName":"受注から出荷まで","finishOnOpen":true,
+ "lanes":[{"id":"L1","name":"顧客"},{"id":"L2","name":"営業"},{"id":"L3","name":"倉庫"}],
+ "nodes":[
+  {"id":"n1","type":"terminal","text":"注文","lid":"L1"},
+  {"id":"n2","type":"rect","text":"注文を受け付ける","lid":"L2"},
+  {"id":"n3","type":"diamond","text":"在庫はあるか","lid":"L2"},
+  {"id":"n4","type":"rect","text":"出荷する","lid":"L3"},
+  {"id":"n5","type":"rect","text":"入荷を待つ","lid":"L3","dashed":true},
+  {"id":"n6","type":"terminal","text":"受け取り","lid":"L1"}],
+ "edges":[{"from":"n1","to":"n2"},{"from":"n2","to":"n3"},{"from":"n3","to":"n4","label":"ある"},
+  {"from":"n3","to":"n5","label":"ない"},{"from":"n5","to":"n4"},{"from":"n4","to":"n6"}]}
+
+例3 マインドマップ（mindmap）
+{"diagramType":"mindmap","diagramName":"会議の論点","finishOnOpen":true,
+ "nodes":[{"id":"r","type":"mind_root","text":"新システムの導入"},
+  {"id":"a","type":"mind_topic","text":"費用が高い","importance":"high"},{"id":"a1","type":"mind_action","text":"補助金を使う"},
+  {"id":"b","type":"mind_topic","text":"操作を覚える時間","status":"open"},{"id":"b1","type":"mind_note","text":"研修は 2 回の予定"}],
+ "edges":[{"from":"r","to":"a"},{"from":"a","to":"a1"},{"from":"r","to":"b"},{"from":"b","to":"b1"}]}
+
+===== AI作図の手引き ここまで ===== -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MultipurposeDiagramMaker v8.33</title>
 <style>
@@ -2873,6 +3117,66 @@ function setTabTitleFromFilename(name){
   const base=String(name).replace(/\.html?$/i,'');
   if(base) document.title=base;
 }
+// v8.33追補: AI が書いた図のデータ（<head> の先頭の「AI作図の手引き」に沿って書いたもの）は、省いてよい項目を省いてくる
+//   （ユーザー要望 2026-10-23「本体だけ AI に渡せば図面を作れるように」）。開いたとき・取り込んだときに、無い項目だけを
+//   既定値で埋める。アプリで保存したファイルは全部の項目を持っているので、ここでは何も変わらない
+function fillStateDefaults(st){
+  if(!Array.isArray(st.lanes)) st.lanes=[];
+  if(!Array.isArray(st.nodes)) st.nodes=[];
+  if(!Array.isArray(st.edges)) st.edges=[];
+  st.lanes.forEach((l,i)=>{ const c=LC[i%LC.length];
+    if(l.name==null) l.name=''; if(!l.bg) l.bg=c.bg; if(!l.hd) l.hd=c.hd; if(!(l.w>0)) l.w=LANE_W; });
+  st.nodes.forEach(n=>{
+    if(n.text==null) n.text='';
+    if(isGanttShape(n.type)) return;   // ガントの位置と大きさは、日付と行から描くたびに決まる
+    const d=SD[n.type]||SD.rect;
+    if(!(n.w>0)) n.w=d.w;
+    if(!(n.h>0)) n.h=d.h;
+    if(typeof n.x!=='number') n.x=0;
+    if(typeof n.y!=='number') n.y=0;
+    if(n.lid==null&&!isMindShape(n.type)&&!st.lanes.length) n.lid=VIRTUAL_LANE.id;
+  });
+  // 線の label・fromLabel・toLabel・fromLid・toLid は、無くても描画が空として扱うので埋めない（2026-08-27 に JSON を直接書いて
+  //   作った業務フロー図は fromLabel・toLabel を持たない。埋めると、開いただけで保存内容が変わる）
+  // uid() は 'e'+連番。AI が同じ形の id を使ったとき、あとで足すシェイプの id とぶつからないように連番を進めておく
+  let mx=+st.uid||0;
+  [...st.lanes,...st.nodes,...st.edges].forEach(o=>{ const m=/^e(\d+)$/.exec(o&&o.id); if(m) mx=Math.max(mx,+m[1]); });
+  st.uid=mx;
+  st.edges.forEach(e=>{ if(!e.id) e.id='e'+(++st.uid); });
+  if(st.diagramType==='gantt') fillGanttDefaults(st);
+  return st;
+}
+function fillGanttDefaults(st){
+  const g=st.gantt||(st.gantt={});
+  const rowNodes=st.nodes.filter(n=>n.type==='gantt_task'||n.type==='gantt_milestone');
+  if(rowNodes.some(n=>typeof n.row!=='number')) rowNodes.forEach((n,i)=>{ n.row=i; });   // 行の番号が無ければ並び順
+  // 時間軸の範囲が無ければタスクの日付から（既定の「今月の 1 日〜」のままだと、先の月のタスクが軸の外に出る）
+  const starts=rowNodes.map(n=>n.type==='gantt_milestone'?n.date:n.startDate).filter(Boolean).sort();
+  const ends=rowNodes.map(n=>n.type==='gantt_milestone'?n.date:(n.endDate||n.startDate)).filter(Boolean).sort();
+  if(g.startDate==null&&starts.length) g.startDate=starts[0];
+  if(!('endDate' in g)&&ends.length) g.endDate=ends[ends.length-1];
+  // 見出し欄・凡例・休日は中の項目まで既定値で埋める（読み込みの Object.assign は 1 段目しか埋めない）
+  if(g.header){ const dh=defaultGanttHeader(); if(g.header.approval) g.header.approval=Object.assign(dh.approval,g.header.approval); g.header=Object.assign(dh,g.header); }
+  if(g.legend) g.legend=Object.assign(defaultGanttLegend(),g.legend);
+  if(g.holidays) g.holidays=Object.assign({sat:true,sun:true,jp:true},g.holidays);
+}
+// v8.33追補: 図のデータに「finishOnOpen: true」があれば、開いたときに一度だけ仕上げる＝AI が座標を計算しなくても図になる。
+//   ガント＝色の無いタスクにフェーズの色を写す（アプリでフェーズに入れたタスクと同じ色）・シーケンス図＝ライフラインと
+//   メッセージを書いた順に並べる（テキスト作図と同じ間隔）・ほかの図種＝「整列」と同じ並べ方。保存し直したファイルには残らない
+function finishAiDraftOnOpen(){
+  if(S.diagramType==='gantt'){
+    const byId={}; S.nodes.forEach(p=>{ if(p.type==='gantt_summary') byId[p.id]=p; });
+    S.nodes.forEach(n=>{ const ph=n.type==='gantt_task'&&!n.color&&byId[n.phaseId];
+      if(ph&&ph.color){ n.color=ganttLighten(ph.color,0.80); n.stroke=ph.color; } });
+    render(); return;
+  }
+  if(S.diagramType==='sequence'){
+    S.nodes.filter(n=>n.type==='lifeline').forEach((n,i)=>{ n.x=40+i*150; n.y=20; });
+    S.edges.forEach((e,j)=>{ e.msgY=20+SD.lifeline.h+44+j*46; });
+    render(); return;
+  }
+  autoLayout({linkedOverlays:true});
+}
 function init(){
   // v6.17: ブラウザタブの表示＝開いているファイル名（拡張子 .html は外す）。
   //   file:// 直開き・localhost のパス付きどちらも対象。パスにファイル名が無い場合（http://…/ ＝ルート配信）は
@@ -2896,6 +3200,7 @@ function init(){
   if(!st&&window.__SAVED_STATE__)st=window.__SAVED_STATE__;
   if(st){
     // 保存データから復元
+    fillStateDefaults(st);   // v8.33追補: AI が省いた項目を既定値で埋める
     S.diagramType=st.diagramType||'swimlane';
     S.orientation=st.orientation||'vertical';
     S.lanes=st.lanes; S.nodes=st.nodes; S.edges=st.edges;
@@ -2920,6 +3225,7 @@ function init(){
     if(ni)ni.value=S_diagramName;
     applyDiagramType();
     lanePanel(); snap(); render();
+    if(st.finishOnOpen===true){ finishAiDraftOnOpen(); snapAsFirst(); }   // v8.33追補: 並べる前の図へは Ctrl+Z で戻らない
     markSaved();   // v8.11追補: 開いた直後＝ファイルの内容と一致
     askBindSaveTarget();   // v8.11追補: 上書き保存の対象を開いた直後に決める（記憶した保存先の確認）
     hint('シェイプをパレットからドラッグ、またはクリックしてキャンバスに配置');
@@ -14588,11 +14894,14 @@ function buildSaveHtml(name){
   const st={diagramType:S.diagramType,orientation:S.orientation,lanes:S.lanes,nodes:S.nodes,edges:S.edges,uid:S.uid,diagramName:name,gantt:S.gantt,mindLayout:S.mindLayout,gridOn:S.gridOn,style:S.style,stepNums:S.stepNums,docId:S.docId,mindBranch:S.mindBranch,mindReserve:S.mindReserve,printPaper:S.printPaper,printOrient:S.printOrient,printFitTall:S.printFitTall,printFitWide:S.printFitWide,appVer:APP_VER};   // v8.22: 改ページ計算に使う用紙   // v8.14: 保存した版番号（インポート時に旧版かどうかを判断する）   // v7.00: 方眼グリッド / v8.01: デザインテンプレート・番号バッジも保存
   const SCR='<scr'+'ipt',CSCR='</scr'+'ipt>';
   const stateJson=JSON.stringify(st).replace(new RegExp(CSCR,'gi'),'<\\/script>');
-  let html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
-  html=html.replace(new RegExp(SCR+' id="__state__">[\\s\\S]*?'+CSCR+'\\s*','g'),'');
-  html=html.replace(new RegExp(SCR+' id="swimlane-state">[\\s\\S]*?'+CSCR+'\\s*','g'),'');
+  // v8.33追補: 前の図のデータの script は DOM で外し、新しいデータは <head> の閉じタグ（head 要素の outerHTML の末尾＝本物）の
+  //   直前に入れる。文字の置き換えで探すと、<head> の先頭の「AI作図の手引き」（コメント）の中にある同じ文字に当たり、
+  //   図のデータがコメントの中に入る（保存したファイルを開くと図が空になる）
+  document.querySelectorAll('script#__state__,script#swimlane-state').forEach(s=>s.remove());
+  const full=document.documentElement.outerHTML, head=document.head.outerHTML, hi=full.indexOf(head);
+  const headNew=head.slice(0,-'</head>'.length)+SCR+' id="swimlane-state">window.__SWIMLANE_STATE__='+stateJson+';'+CSCR+'\n</head>';
+  let html='<!DOCTYPE html>\n'+full.slice(0,hi)+headNew+full.slice(hi+head.length);
   html=html.replace(/\s+data-state="[^"]*"/g,'');
-  html=html.replace('</head>',()=>SCR+' id="swimlane-state">window.__SWIMLANE_STATE__='+stateJson+';'+CSCR+'\n</head>');
   return {safe,html};
 }
 // v8.09: 従来どおりダウンロードで保存（上書き保存が使えないブラウザ・失敗時のフォールバック）
@@ -16053,7 +16362,14 @@ function importFromFile(ev){
   reader.readAsText(file);
 }
 // 保存HTMLから window.__SWIMLANE_STATE__ を抽出
+// v8.33追補: まず id="swimlane-state" の script 要素として探す＝<head> の先頭の「AI作図の手引き」（コメント）の中の同じ文字を
+//   拾わない・AI が「=」の前後に空白を入れて書いたファイルも読める。見つからなければ従来どおり文字で探す（旧版の保存ファイル）
 function extractSavedState(html){
+  try{
+    const el=new DOMParser().parseFromString(html,'text/html').getElementById('swimlane-state');
+    const m=el&&el.textContent.match(/^\s*window\.__SWIMLANE_STATE__\s*=\s*([\s\S]*?);?\s*$/);
+    if(m) return JSON.parse(m[1]);
+  }catch(_){}
   const key='window.__SWIMLANE_STATE__=';
   const i=html.indexOf(key); if(i<0)return null;
   const rest=html.slice(i+key.length);
@@ -16095,6 +16411,7 @@ function migrateLegacyEdgeRouting(savedVer){
 function importStateFromHtml(html,asked){
   const st=extractSavedState(html);
   if(!st||!Array.isArray(st.nodes)) throw new Error('編集データが見つかりません');
+  fillStateDefaults(st);   // v8.33追補: AI が省いた項目を既定値で埋める
   // 既存の図がある場合は置き換え確認（破壊的操作のため）
   if((S.nodes&&S.nodes.length)||(S.lanes&&S.lanes.length)){
     if(!asked&&!window.confirm('現在の図はインポートする内容で置き換えられます。よろしいですか？')) return false;   // v6.17追補: 取消＝タブ名称も変えない / v8.11追補: 既に4択で尋ねていれば重ねて訊かない
@@ -16130,6 +16447,7 @@ function importStateFromHtml(html,asked){
   const ni=document.getElementById('diagram-name');
   if(ni)ni.value=S_diagramName;
   applyDiagramType(); lanePanel(); snapAsFirst(); render();   // v8.32（計画外の修正）: 置き換え＝読み込む前の図へは Ctrl+Z で戻らない
+  if(st.finishOnOpen===true){ finishAiDraftOnOpen(); snapAsFirst(); }   // v8.33追補: AI が書いた図は開いたときと同じく仕上げる
   hint(`インポート完了（置き換え）: ${getDT().name} / レーン${S.lanes.length} / シェイプ${S.nodes.length} / 線${S.edges.length}`
        +(_dropped?` ／ 接続線の経路は最新の仕組みで引き直しました`:''));
   markSaved();   // v8.11追補: 読み込んだ内容＝ファイルの内容なので、この時点は未保存ではない
@@ -17618,10 +17936,14 @@ function toastHide(){
 const LAYOUT_MIN_ROW_GAP=24;    // 行（段）どうしの最小の隙間（37px の行なら 80px ピッチ＝手動吸着の最短距離と同じ）
 const LAYOUT_MIN_SIDE_GAP=24;   // 同じ段・同じレーンに横並びするときの最小の隙間
 const LAYOUT_LANE_INSET=10;     // レーンの端から最低これだけ離す
-function autoLayout(){
+// v8.33追補: opts.linkedOverlays＝線でつながった書類・データ・補足情報も工程として並べる（AI が書いた図を開いたときの仕上げ
+//   finishAiDraftOnOpen だけが使う。AI はフローチャートの入出力に「データ」を手順の一つとして使う。ふだんの整列では従来どおり、
+//   重ね置きは近くの工程に付いて動く注記として扱う）
+function autoLayout(opts={}){
   if(S.diagramType==='mindmap'){ mindLayout(); return; }
   if(S.diagramType==='orgchart'){ orgTreeLayout(); return; }   // v7.00: 組織図は本物のツリー整列へ
-  const targets=S.nodes.filter(n=>!isCrosslaneType(n.type)&&!isGroupType(n.type)&&!isOverlayShape(n.type));
+  const linked=new Set(); if(opts.linkedOverlays) S.edges.forEach(e=>{ linked.add(e.from); linked.add(e.to); });
+  const targets=S.nodes.filter(n=>!isCrosslaneType(n.type)&&!isGroupType(n.type)&&(!isOverlayShape(n.type)||linked.has(n.id)));
   if(!targets.length)return;
   const rec=layoutRecordAttachments(targets);
   if(usesLanes()&&S.lanes.length) laneFlowLayout(targets); else layoutRowsCentered(targets);
@@ -17634,7 +17956,8 @@ function autoLayout(){
 function layoutRecordAttachments(targets){
   const pos={}; S.nodes.forEach(n=>{ pos[n.id]={x:n.x,y:n.y}; });
   const overlays=[];
-  S.nodes.filter(n=>isOverlayShape(n.type)).forEach(o=>{
+  // v8.33追補: 工程として並べる重ね置き（autoLayout の linkedOverlays）は付いて動かさない＝並べた位置から別の工程の上へ付け直されていた
+  S.nodes.filter(n=>isOverlayShape(n.type)&&!targets.includes(n)).forEach(o=>{
     let best=null,bestA=0,bestD=Infinity;
     targets.forEach(t=>{
       const a=Math.max(0,Math.min(o.x+o.w,t.x+t.w)-Math.max(o.x,t.x))*Math.max(0,Math.min(o.y+o.h,t.y+t.h)-Math.max(o.y,t.y));
