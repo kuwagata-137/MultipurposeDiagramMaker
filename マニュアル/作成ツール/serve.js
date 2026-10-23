@@ -5,7 +5,7 @@ const dir = path.resolve(__dirname, '..', '..');   // リポジトリのルー�
 const server = http.createServer((req, res) => {
   const reqPath = req.url.split('?')[0].split('#')[0];   // クエリ/ハッシュ除去（?v=... でのキャッシュ回避を許可）
   let rel;
-  try { rel = decodeURIComponent(reqPath === '/' ? '/アプリケーション本体/diagram_v8.33.html' : reqPath); }
+  try { rel = decodeURIComponent(reqPath === '/' ? '/アプリケーション本体/MultipurposeDiagramMaker_v8.33.html' : reqPath); }
   catch (e) { res.writeHead(400); res.end('Bad request'); return; }   // 壊れた %xx でサーバーが落ちないように
   const filePath = path.resolve(dir, '.' + rel);
   // このフォルダの外（..%2f などで上へ出る）は読ませない

@@ -23,7 +23,7 @@ const os = require('os');
 
 // マニュアル用の撮影対象。版を上げたらここも上げる（旧版はリネームで消えるため参照できなくなる）。
 // serve.js はリポジトリのルートを配る＝本体は アプリケーション本体/ の下（日本語のフォルダ名は URL 用に符号化する）
-const URL = 'http://localhost:8765/' + encodeURI('アプリケーション本体/diagram_v8.33.html');
+const URL = 'http://localhost:8765/' + encodeURI('アプリケーション本体/MultipurposeDiagramMaker_v8.33.html');
 // 撮った画面はリポジトリのルートの screenshots/manual/（.gitignore 対象）
 const outDir = path.join(__dirname, '..', '..', 'screenshots', 'manual');
 const VW = 1600, VH = 900, DSF = 2;   // メニューバーが ‹ › なしで全部見える幅（実測 1583px）・2 倍の解像度

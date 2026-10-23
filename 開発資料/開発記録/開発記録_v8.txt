@@ -4075,3 +4075,7 @@ v8.19（2026-08-28）接続位置ピンのスナップ改善＋グループ枠�
   そのまま入っていた＝細工したファイルでスクリプトを紛れ込ませられる。行の名前は id の形（r3・r4・ri＋数字）だけ通す（ganttInfoRowIds）・
   列と行の id が __proto__ などなら読み書きしない（GANTT_BAD_KEY）・色は #16 進の形だけ HTML とキーに使う（ghColor・ganttTaskColorGroups の lc）・
   列の id は属性に入れる前にエスケープ。試験 3 項目（行の名前・__proto__・色に HTML を入れても動かない）を足して 41 項目。
+【計画外: アプリのファイル名】（ユーザー指示「アプリのファイル名も MultipurposeDiagramMaker に」）diagram_v8.33.html → MultipurposeDiagramMaker_v8.33.html。
+  版の番号は残した（版の管理・旧版との見分けに使うため。マニュアルの docx と同じ付け方）。v4.00 の swimlane_ → diagram_ に続く 2 回目の改名。
+  直したのは今の版を指す所だけで、過去の版の記録（「旧: diagram_v8.31.html」など）は当時の名前のまま。アプリの中に自分のファイル名を
+  使う処理は無い（保存・上書き先の記録はファイル名に依らない）。版上げの手順（CLAUDE.md・運用ルール）の git mv の例も新しい名前に。

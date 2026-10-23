@@ -4,7 +4,7 @@
 
 ## ExcelJS 4.4.0
 
-- 同梱している所: `開発資料/exceljs.bare.min.js`、`アプリケーション本体/diagram_v*.html` の中（Excel 出力のため）
+- 同梱している所: `開発資料/exceljs.bare.min.js`、`アプリケーション本体/MultipurposeDiagramMaker_v*.html` の中（Excel 出力のため）
 - 入手元: https://github.com/exceljs/exceljs
 - ライセンス: MIT License（全文は下のとおり。元のリポジトリの `LICENSE` を正とする）
 - ExcelJS のブラウザ向けの部品には、ExcelJS が使うほかのソフトウェアも含まれ、それぞれのライセンスに従います。
