@@ -3689,15 +3689,39 @@ function placeShape(type,px,py){
 }
 // ── ガントチャート: タスク配置 ──
 function ganttMaxRow(){let m=-1;S.nodes.forEach(n=>{if(n.type==='gantt_task'||n.type==='gantt_milestone')m=Math.max(m,n.row||0);});return m;}
-function ganttPlace(type,px,py){
+// v8.33追補: パレットの「フェーズ」を選んで、配置を待っているか（ユーザー報告 2026-11-02「フェーズを左クリックだけで置けない」）
+function ganttPhaseArmed(){ return S.diagramType==='gantt'&&S.mode==='select'&&activePal==='gantt_summary'; }
+// v8.33追補: 押した位置の行のタスク／マイルストーン（行の無い所・フェーズの見出しの行は null）。折り返し・固定表示の読み替えは ganttInsertTarget と同じ
+function ganttRowNodeAt(px,py){
+  ({x:px,y:py}=ganttStickyPt(px,py));
+  if(ganttLocalY(py)<ganttBodyTop()) return null;
+  const bs=ganttBands(), band=(ganttWrapOn()&&bs.length)?ganttBandAtY(py):null;
+  const dy=(band!=null)?bs[band].dy:0;
+  const sv=_gwBand; _gwBand=band;
+  const L=ganttLayout(); _gwBand=sv;
+  const y=py-dy, s=L.slots.find(s=>s.kind==='task'&&s.node&&y>=s.top&&y<s.top+s.height);
+  return s?s.node:null;
+}
+// v8.33追補: フェーズの配置を待っている間に、タスクのバー・タスク名の欄を押した＝選択やドラッグにせず、離したときにそのタスクでフェーズを作る
+//   （置くのは離したとき＝v8.29 のクリック配置と同じ。左右同時押し・Esc で取り消せる）。待っていなければ false＝ふだんの処理へ
+function ganttPhasePressOnRow(ev,n){
+  if(!ganttPhaseArmed()||!n||!ganttIsRowNode(n.type)||ev.button!==0) return false;
+  palPlaceState={type:'gantt_summary',nid:n.id};
+  return true;
+}
+function ganttPlace(type,px,py,targetId){
   const g=S.gantt;
   const dt=getDT();
   // フェーズ（v4.17）: 行ではなく、選択タスク（なければ最下タスク）を初期メンバーにした縦バンドを作る
+  // v8.33追補: 中身にするタスクの決め方＝①押したバー・タスク名のタスク（targetId）②選んでいるタスク（v8.32追補 B-4・マニュアルの手順）
+  //   ③押した位置の行のタスク ④いちばん下のタスク。従来は①③が無く、行の空いた所を押してもいちばん下のタスクになり、
+  //   バーやタスク名を押すと選択になるだけで置かれなかった（ユーザー報告 2026-11-02）
   if(type==='gantt_summary'){
     const rows=ganttNodesSorted();
     if(!rows.length){ hint('先にタスク／マイルストーンを配置してください'); return; }
+    const byId=targetId?rows.find(n=>n.id===targetId):null;
     const sel=S.sel.length?S.nodes.find(n=>n.id===S.sel[0]&&ganttIsRowNode(n.type)):null;
-    const target=sel||rows[rows.length-1];
+    const target=byId||sel||ganttRowNodeAt(px,py)||rows[rows.length-1];
     const ph={id:uid(),type:'gantt_summary',text:dt.shapeTexts?.gantt_summary||SD.gantt_summary.text};
     S.nodes.push(ph);
     target.phaseId=ph.id;          // 排他: 既存フェーズからは移籍
@@ -7577,7 +7601,8 @@ function renderGanttNameCol(){
   // 透明ヒット領域: mousedownで行ドラッグ・dblで該当フィールド編集・右クリックで削除
   const addHit=(n,field,x0,y0,w,h)=>{
     const hit=e('rect',{class:'g-hit',x:x0,y:y0,width:Math.max(0,w),height:Math.max(0,h),fill:'transparent',cursor:'default'});  // v4.30: 編集セルのカーソルを手→通常に（v8.32: g-hit＝ganttPlaceableTarget）
-    hit.addEventListener('mousedown',ev=>{ev.stopPropagation();const pt=svgPt(ev);S.sel=[n.id];
+    hit.addEventListener('mousedown',ev=>{ev.stopPropagation();if(ganttPhasePressOnRow(ev,n))return;   // v8.33追補: フェーズの配置待ち＝このタスクで作る
+      const pt=svgPt(ev);S.sel=[n.id];
       ganttDragState={mode:'row',nid:n.id,startX:pt.x,startY:pt.y,moved:false};});
     // v5.01: 情報欄（名称・各セル）のダブルクリックでも編集モーダルを開く（工程バーと同じ編集画面に統一）。
     hit.addEventListener('dblclick',ev=>{ev.stopPropagation();
@@ -7628,7 +7653,7 @@ function renderGanttNameCol(){
     const dateTop=top+pad+lh, di=tx0-bx;
     const dateStr=(lw0?'':'工程：')+((n.type==='gantt_milestone')?ganttDispDate(n.date):(ganttDispDate(n.startDate)+'～'+ganttDispDate(n.endDate)));
     const dhit=e('rect',{class:'g-hit',x:bx,y:dateTop,width:nw,height:lh,fill:'transparent',cursor:'default'});
-    dhit.addEventListener('mousedown',ev=>{ev.stopPropagation();const pt=svgPt(ev);S.sel=[n.id];ganttDragState={mode:'row',nid:n.id,startX:pt.x,startY:pt.y,moved:false};});
+    dhit.addEventListener('mousedown',ev=>{ev.stopPropagation();if(ganttPhasePressOnRow(ev,n))return;const pt=svgPt(ev);S.sel=[n.id];ganttDragState={mode:'row',nid:n.id,startX:pt.x,startY:pt.y,moved:false};});
     dhit.addEventListener('dblclick',ev=>{ev.stopPropagation();if(nodeClickTimer!==null){clearTimeout(nodeClickTimer);nodeClickTimer=null;}openGanttEditor(n.id);});
     dhit.addEventListener('contextmenu',ev=>{ev.stopPropagation();ev.preventDefault();S.sel=[n.id];delSel();});
     gg.appendChild(dhit);
@@ -7779,6 +7804,7 @@ function ganttNodeMD(ev,id){
   if(ev.button!==0)return;
   if(S.mode==='connect'){ ganttConnClick(id); return; }
   const n=S.nodes.find(x=>x.id===id); if(!n)return;
+  if(ganttPhasePressOnRow(ev,n)) return;   // v8.33追補: フェーズの配置待ちにバーを押した＝選択・移動にせず、離したときにこのタスクでフェーズを作る
   const pt=svgPt(ev);
   S.sel=[id];
   ganttDragState={mode:'move',nid:id,startX:pt.x,startY:pt.y,moved:false,
@@ -7790,6 +7816,7 @@ function ganttNodeMD(ev,id){
 function ganttStartDrag(ev,id,mode){
   if(ev.button!==0)return;
   const n=S.nodes.find(x=>x.id===id); if(!n)return;
+  if(ganttPhasePressOnRow(ev,n)) return;   // v8.33追補: バーの端のつまみもバーと同じ
   const pt=svgPt(ev);
   S.sel=[id];
   ganttDragState={mode,nid:id,startX:pt.x,startY:pt.y,moved:false,
@@ -11333,6 +11360,7 @@ function palClick(type){
   if(S.mode!=='select')setMode('select');   // v8.10: 接続・ハンドツール中にパレットを触ったら選択モードへ戻す
   const label=getDT().palLabels[type]||SD[type]?.text||type;
   if(type==='group_box') hint(`「${label}」: 何もない所で 2 つの角を順にクリック、またはドラッグで囲んで配置（何もない所で右クリック / Esc でキャンセル）`);   // v8.31追補⑱
+  else if(type==='gantt_summary'&&S.diagramType==='gantt') hint(`「${label}」: 入れたいタスクのバー・タスク名・行をクリックして配置（何もない所で右クリック / Esc でキャンセル）`);   // v8.33追補
   else hint(`「${label}」: キャンバスをクリックして配置（何もない所で右クリック / Esc でキャンセル）`);
 }
 
@@ -13303,7 +13331,9 @@ document.addEventListener('mouseup',ev=>{   // v8.15追補: 繋ぎ替え確定�
     const p=placePtAtClient(ev.clientX,ev.clientY);
     // v8.31追補⑱: ドラッグで囲んでいてキャンバスの外で離した＝置かない。押した位置は 1 点目として残す（2 回クリックの 2 点目待ちと同じ）
     if(!p){ if(st.drag&&groupDrawState) hint('キャンバスの外なので置いていません。対角をクリックして確定（右クリックで1点目を取消・Esc で中止）'); return; }   // v8.31追補㉗: 要約
-    if(st.type==='group_box') groupBoxClick(p.px,p.py); else placeShape(st.type,p.px,p.py);
+    if(st.type==='group_box') groupBoxClick(p.px,p.py);
+    else if(st.nid) ganttPlace(st.type,p.px,p.py,st.nid);   // v8.33追補: フェーズの配置待ちにバー・タスク名を押した
+    else placeShape(st.type,p.px,p.py);
     return;
   }
   if(gapState&&gapState.dragFrom!=null){ commitGapInsert(); return; }   // v8.25
