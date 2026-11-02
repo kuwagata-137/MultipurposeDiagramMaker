@@ -2136,6 +2136,35 @@ function ganttAddUnit(date,n,scale){
   else if(scale==='year') d.setFullYear(d.getFullYear()+n);   // v8.08: 折り返し単位「年ごと」用
   return d;
 }
+// v8.33追補: ドラッグで動かした量（dx・図の座標）だけ日付をずらす。日・週・月の目盛りは 1 日ずつ、時の目盛りは 1 時間ずつ
+//   （ユーザー要望 2026-11-02「バーやアイコンのドラッグの最小単位が大きすぎる」＝従来は目盛り 1 つぶん＝週なら 1 週間・月なら 1 か月ずつ）。
+//   unit=true（Shift を押している）なら従来どおり目盛り 1 つぶんずつ。月の目盛りは月ごとに日数が違うので、動かした先の位置にいちばん近い日に寄せる
+function ganttShiftByPx(orig,dx,unit){
+  const g=S.gantt, cw=ganttColW();
+  if(unit||g.scale==='hour'||g.scale==='day') return ganttAddUnit(orig,Math.round(dx/cw),g.scale);
+  const ppd=(g.scale==='week')?cw/7:cw/30, tx=ganttDateToX(orig)+dx;
+  let cur=ganttAddUnit(orig,Math.round(dx/ppd),'day');
+  for(let i=0;i<4;i++){
+    const cx=ganttDateToX(cur), nx=ganttAddUnit(cur,cx<tx?1:-1,'day');
+    if(Math.abs(ganttDateToX(nx)-tx)<Math.abs(cx-tx)) cur=nx; else break;
+  }
+  return cur;
+}
+// v8.33追補: 矢印キーで選んだタスク・マイルストーンを動かす（dir＝−1／+1・unit＝目盛り 1 つぶん）。期間の長さは変えない。履歴は 1 回押すごとに 1 つ
+function ganttNudgeSel(dir,unit){
+  const g=S.gantt, sc=unit?g.scale:ganttShiftStep();
+  const ns=S.nodes.filter(n=>S.sel.includes(n.id)&&ganttIsRowNode(n.type));
+  if(!ns.length) return;
+  ns.forEach(n=>{
+    if(n.type==='gantt_milestone'){ if(n.date) n.date=ganttFmt(ganttAddUnit(n.date,dir,sc),g.scale); }
+    else { if(n.startDate) n.startDate=ganttFmt(ganttAddUnit(n.startDate,dir,sc),g.scale); if(n.endDate) n.endDate=ganttFmt(ganttAddUnit(n.endDate,dir,sc),g.scale); }
+  });
+  snap(); render();
+  const n=ns[0]; hint(ns.length>1?(ns.length+'件を動かしました'):(n.type==='gantt_milestone'?('日付: '+ganttHintD(n.date)):('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate))));
+}
+// v8.33追補: a から b へ何日（時の目盛りは何時間）ずれたか。期間を保ったまま動かすときに、終わりの日へ同じだけ足すのに使う
+function ganttShiftAmount(a,b){ return S.gantt.scale==='hour'?Math.round(ganttDiffUnit(a,b,'hour')):Math.round(ganttDiffUnit(a,b,'day')); }
+function ganttShiftStep(){ return S.gantt.scale==='hour'?'hour':'day'; }
 // d1 から d2 までの単位数（scale）。週は7日単位、月は暦月差、v8.06: 時は3600秒単位で算出
 function ganttDiffUnit(d1,d2,scale){
   const a=ganttParseDate(d1),b=ganttParseDate(d2);
@@ -12709,26 +12738,29 @@ function onDocMouseMove(ev){   // v8.23: 無名関数から切り出し＝edgeAu
       hint('上下にドラッグでフェーズの順序を入れ替え（中のタスクも一緒に動きます・Esc で中止）'); return;
     }
     const n=S.nodes.find(x=>x.id===gs.nid); if(!n)return;
-    const du=Math.round((pt.x-gs.startX)/ganttColW());
+    // v8.33追補: 1 日ずつ（時の目盛りは 1 時間ずつ）動かす。Shift を押している間は従来どおり目盛り 1 つぶんずつ（ganttShiftByPx）
+    const dx=pt.x-gs.startX, unit=!!ev.shiftKey, tip=unit?'（離すと確定）':'（離すと確定・Shift で目盛りごと）';
     if(gs.mode==='move'){
       if(n.type==='gantt_milestone'){
-        n.date=ganttFmt(ganttAddUnit(gs.orig.date,du,g.scale),g.scale);   // v8.06: 時モードは時刻付き
-        render(); hint('日付: '+ganttHintD(n.date)+'（離すと確定）'); return;   // v8.21: リアルタイム表示
+        n.date=ganttFmt(ganttShiftByPx(gs.orig.date,dx,unit),g.scale);   // v8.06: 時モードは時刻付き
+        render(); hint('日付: '+ganttHintD(n.date)+tip); return;   // v8.21: リアルタイム表示
       } else {
-        n.startDate=ganttFmt(ganttAddUnit(gs.orig.startDate,du,g.scale),g.scale);
-        n.endDate=ganttFmt(ganttAddUnit(gs.orig.endDate,du,g.scale),g.scale);
+        const ns=ganttShiftByPx(gs.orig.startDate,dx,unit);
+        n.startDate=ganttFmt(ns,g.scale);
+        // 期間の長さを保つ: 目盛りごとなら終わりも目盛りで・日ごとなら終わりにも同じ日数（時間）を足す
+        n.endDate=ganttFmt(unit?ganttAddUnit(gs.orig.endDate,Math.round(dx/ganttColW()),g.scale):ganttAddUnit(gs.orig.endDate,ganttShiftAmount(gs.orig.startDate,ns),ganttShiftStep()),g.scale);
       }
-      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+'（離すと確定）'); return;
+      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+tip); return;
     }
     if(gs.mode==='resize-left'){
-      const nd=ganttFmt(ganttAddUnit(gs.orig.startDate,du,g.scale),g.scale);   // v8.06
+      const nd=ganttFmt(ganttShiftByPx(gs.orig.startDate,dx,unit),g.scale);   // v8.06
       if(ganttDiffUnit(nd,n.endDate,g.scale)>=0) n.startDate=nd;
-      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+'（離すと確定）'); return;
+      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+tip); return;
     }
     if(gs.mode==='resize-right'){
-      const nd=ganttFmt(ganttAddUnit(gs.orig.endDate,du,g.scale),g.scale);   // v8.06
+      const nd=ganttFmt(ganttShiftByPx(gs.orig.endDate,dx,unit),g.scale);   // v8.06
       if(ganttDiffUnit(n.startDate,nd,g.scale)>=0) n.endDate=nd;
-      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+'（離すと確定）'); return;
+      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+tip); return;
     }
     if(gs.mode==='progress'){
       n.progress=Math.round(Math.max(0,Math.min(100,(pt.x-n.x)/n.w*100)));
@@ -14689,6 +14721,11 @@ document.addEventListener('keydown',ev=>{
   if((ev.ctrlKey||ev.metaKey)&&(ev.key==='a'||ev.key==='A')){ev.preventDefault();if(!pasteMode)selectAll();return;}
   // グループ化（Ctrl+G）／グループ解除（Ctrl+Shift+G）— v4.09 D-2
   if((ev.ctrlKey||ev.metaKey)&&(ev.key==='g'||ev.key==='G')){ev.preventDefault();if(ev.shiftKey)ungroupSel();else groupSel();return;}
+  // v8.33追補: ガントは ← → で選んだタスク・マイルストーンを 1 日（時の目盛りは 1 時間）ずつ、Shift＋← → で目盛り 1 つぶんずつ動かす
+  //   （従来はガントでは矢印キーが効かなかった＝nudgeSel がガントを対象外にしている）。↑↓ は何もしない
+  if(S.diagramType==='gantt'&&!pasteMode&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&S.sel.length&&(ev.key==='ArrowLeft'||ev.key==='ArrowRight')){
+    ev.preventDefault(); ganttNudgeSel(ev.key==='ArrowLeft'?-1:1,ev.shiftKey); return;
+  }
   // 矢印キー微移動（nudge）: 1px、Shiftで10px — v4.03 D-1
   if(!pasteMode&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&S.sel.length&&
      (ev.key==='ArrowUp'||ev.key==='ArrowDown'||ev.key==='ArrowLeft'||ev.key==='ArrowRight')){
@@ -18088,8 +18125,8 @@ function selHintMsg(){
   if(S.diagramType==='gantt'){
     const n=nodes[0]; if(!n)return null;
     if(n.type==='gantt_summary')return 'フェーズ: 上下にドラッグで順序を入れ替え / 上下端のハンドルで包括するタスク範囲を調整 / Dblクリックで詳細編集';   // v8.33追補
-    if(n.type==='gantt_milestone')return 'ドラッグで日付を移動 / Dblクリックで詳細編集';
-    return 'ドラッグで期間を移動 / 両端のハンドルで伸縮 / Dblクリックで詳細編集';
+    if(n.type==='gantt_milestone')return 'ドラッグで日付を移動（1 日ずつ・Shift で目盛りごと）/ ←→キーでも移動 / Dblクリックで詳細編集';   // v8.33追補
+    return 'ドラッグで期間を移動（1 日ずつ・Shift で目盛りごと）/ 両端のハンドルで伸縮 / ←→キーでも移動 / Dblクリックで詳細編集';
   }
   if(nodes.length>=2)
     return 'ドラッグでまとめて移動 / Deleteでまとめて削除'+(groupingAllowed()?' / 「整列」「グループ化」が使えます':'');
