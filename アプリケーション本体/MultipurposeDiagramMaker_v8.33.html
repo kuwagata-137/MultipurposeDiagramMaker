@@ -656,6 +656,8 @@ body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;displ
 .gm-cols-cell>span{flex:0 0 auto;color:#94a3b8}
 .gm-field .gm-cols-cell input[type=text]{flex:1 1 0;width:auto;min-width:0}
 .gm-field .gm-cols-cell input.l{flex:0 0 38%}
+.gm-cols-cell textarea.v{flex:1 1 0;width:auto;min-width:0;resize:none;overflow:hidden;font-family:inherit;font-size:13px;line-height:18px;padding:7px 9px;border:1.5px solid #e2e8f0;border-radius:6px;box-sizing:border-box;outline:none;display:block}   /* v8.33追補: 本文は改行できる欄（見た目は 1 行の入力欄と同じ） */
+.gm-cols-cell textarea.v:focus{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.12)}
 .gm-cols-add{position:sticky;right:0;box-shadow:-9px 0 0 #fff;margin-left:8px;border:1.5px dashed #94a3b8;   /* 列が多く表が横にスクロールしても右端に見えたまま（影＝左の隙間を白で埋める） */border-radius:7px;background:#f8fafc;color:#475569;font-size:12px;font-weight:700;font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;line-height:1.35;cursor:pointer;padding:4px}
 .gm-cols-add b{font-size:18px;line-height:1}
 .gm-cols-add:hover{border-color:#3b82f6;color:#2563eb;background:#eff6ff}
@@ -8147,6 +8149,7 @@ function openGanttEditor(id){
   cw.appendChild(custom);
   ganttModalSizeBox(isSum?0:ganttColList().length);
   document.getElementById('gantt-modal').style.display='flex';
+  ganttModalFitAreas();   // v8.33追補: 改行のある本文は欄を行数ぶんの高さに（表示してから測る）
   setTimeout(()=>document.getElementById('gm-name')?.focus(),50);
 }
 // v8.32: 編集画面の「＋ 列を追加」で足した列。「適用」（confirmGanttEdit）で S.gantt.cols に入れる。キャンセル・閉じるなら捨てる
@@ -8158,7 +8161,7 @@ function ganttModalRowIds(){ return ganttInfoRowIds().filter(r=>!_gmDelRows.incl
 // v8.33: 表の入力中の値を控える {列のid:{行のid:{l,v}}}（行・列を足したり消したりして表を描き直すときに入力を消さないため）
 function ganttModalDraft(f){
   const draft={};
-  f.querySelectorAll('input[data-col]').forEach(inp=>{
+  f.querySelectorAll('input[data-col],textarea[data-col]').forEach(inp=>{   // v8.33追補: 本文は textarea
     const dc=draft[inp.dataset.col]||(draft[inp.dataset.col]={});
     const dr=dc[inp.dataset.row]||(dc[inp.dataset.row]={});
     dr[inp.dataset.k]=inp.value;
@@ -8192,12 +8195,21 @@ function ganttModalColsHtml(n,draft){
       h+=`<div class="gm-cols-cell">`
         +`<input type="text" class="l" id="gm-col-${cid}-${row}-l" ${at} data-k="l" placeholder="項目名" value="${esc(get(c,row,'l'))}"/>`
         +`<span>：</span>`
-        +`<input type="text" id="gm-col-${cid}-${row}-v" ${at} data-k="v" placeholder="本文" value="${esc(get(c,row,'v'))}"/></div>`;
+        +`<textarea class="v" rows="1" id="gm-col-${cid}-${row}-v" ${at} data-k="v" placeholder="本文" title="Shift＋Enter または Alt＋Enter で改行" oninput="ganttModalFitArea(this)">${esc(get(c,row,'v'))}</textarea></div>`;   // v8.33追補: 本文は改行できる（Shift／Alt＋Enter）
     });
   });
   h+=`</div></div><button type="button" class="gm-rows-add" onclick="ganttModalAddRow()" title="下に行を足します（全部のタスクに増えます・「適用」で工程表へ反映）"><span>＋</span> 行を追加</button>`
     +`<div class="gm-cols-hint">「＋ 列を追加」で右に列${nc+1}、「＋ 行を追加」で下に行${rows.length+1}が増えます。「適用」を押したときに工程表へ反映します。</div></div>`;
   return h;
+}
+// v8.33追補: 情報欄の本文の欄（textarea）の高さを中身の行数に合わせる。表を描き直したとき・編集画面を開いたときにも呼ぶ
+function ganttModalFitArea(ta){ if(!ta) return; ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }
+function ganttModalFitAreas(){ document.querySelectorAll('#gm-cols-field textarea.v').forEach(ganttModalFitArea); }
+// v8.33追補: 本文の欄で Shift＋Enter／Alt＋Enter＝改行を入れる（Enter だけなら従来どおり「適用」）。Alt＋Enter は textarea でも改行が入らないので自分で入れる
+function ganttModalInsertBreak(ta){
+  const a=ta.selectionStart, b=ta.selectionEnd;
+  if(!document.execCommand||!document.execCommand('insertText',false,'\n')){ ta.setRangeText('\n',a,b,'end'); }   // execCommand＝Ctrl+Z で戻せる
+  ganttModalFitArea(ta);
 }
 // v8.33: 編集画面の「＋ 行を追加」＝入力中の値を控えて表を描き直し、下に行を 1 本足す（図に入れるのは「適用」のとき）
 function ganttModalAddRow(){
@@ -8205,7 +8217,7 @@ function ganttModalAddRow(){
   if(!n||!f) return;
   const draft=ganttModalDraft(f), row='ri'+(++S.uid);
   _gmPendingRows.push(row);
-  f.outerHTML=ganttModalColsHtml(n,draft);
+  f.outerHTML=ganttModalColsHtml(n,draft); ganttModalFitAreas();
   document.getElementById('gm-col-c0-'+row+'-l')?.focus();
 }
 // v8.33: 行の「×」＝その行を表から外す（足したばかりの行なら取り消すだけ。図の行なら「適用」で全タスクから消す）
@@ -14541,6 +14553,8 @@ document.addEventListener('keydown',ev=>{
   // ガント詳細モーダルが開いている間は Esc=閉じる / Enter=適用
   if(document.getElementById('gantt-modal').style.display==='flex'){
     if(ev.key==='Escape'){ev.preventDefault();closeGanttModal();}
+    else if(ev.key==='Enter'&&ev.isComposing) return;   // v8.33追補: 日本語の変換を確定する Enter では適用しない
+    else if(ev.key==='Enter'&&(ev.shiftKey||ev.altKey)&&ev.target.matches&&ev.target.matches('#gm-cols-field textarea.v')){ev.preventDefault();ganttModalInsertBreak(ev.target);}   // v8.33追補: 情報欄の本文は Shift／Alt＋Enter で改行
     else if(ev.key==='Enter'&&ev.target.type!=='range'){ev.preventDefault();confirmGanttEdit();}
     return;
   }
@@ -16289,6 +16303,9 @@ async function expExcel(){
     ws.getCell(base+1,3).value=isMile?ganttDispDate(n.date):(ganttDispDate(n.startDate)+'～'+ganttDispDate(n.endDate));
     if(!isMile){ labelCell(ws.getCell(base+1,4),'進捗率',bc); ws.getCell(base+1,5).value=Math.max(0,Math.min(100,n.progress||0))+'％'; }
     infoRowIds.forEach((row,ri)=>{                  // 行3〜 各情報列の 項目名｜本文
+      // v8.33追補: 本文に改行があれば、その行を改行の数ぶんの高さに（無ければ従来どおり高さを決めない）
+      const brk=Math.max(1,...cols.map(col=>String(ganttCellVal(n,col.id,row)||'').split('\n').length));
+      if(brk>1) ws.getRow(base+2+ri).height=15*brk;
       cols.forEach((col,ci)=>{
         labelCell(ws.getCell(base+2+ri,2+ci*2),ganttCellLabel(n,col.id,row),bc);
         const vc=ws.getCell(base+2+ri,3+ci*2); vc.value=ganttCellVal(n,col.id,row);
