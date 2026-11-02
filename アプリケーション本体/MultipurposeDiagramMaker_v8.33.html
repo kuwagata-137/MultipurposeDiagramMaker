@@ -7437,11 +7437,13 @@ function renderGanttTaskBar(gg,n,sel){
     if(sg.hol) at['stroke-dasharray']='4 3';
     grp.appendChild(e('path',at));
   });
-  const label=n.text||'';
+  const label=(_bx1>ganttLeftW()+0.01)?(n.text||''):'';   // v8.33追補: 開始日より前で終わる＝バーが見えないので文字も出さない
   const t=e('text',{fill:'#1e293b','pointer-events':'none'});
   // v8.08追補③: 折り返しONで段をまたぐバーは、ラベルも「その段に出ている部分」に合わせる。
   //   n.x/n.w は切る前の座標なので、そのまま使うと段の左外＝左情報欄の上に文字が乗る。
-  const _lx=ganttWrapOn()?_bx0:n.x, _lw=ganttWrapOn()?(_bx1-_bx0):n.w;
+  // v8.33追補: 開始日（時間軸の左端）より前から始まるバーは、文字も開始日から書く。従来は n.x（バーの本当の左端）から書いたため、
+  //   文字が開始日より左＝タスク名の列の下に入って見えなかった（ユーザー報告 2026-11-02）。開始日より前で終わるバーは文字も出さない
+  const _lx=Math.max(_bx0,ganttLeftW()), _lw=_bx1-_lx;
   // v4.30: バー内に収まるようフォントを自動縮小（基準fs=12時の所要幅 = len*13+12）。
   //        ただし8px未満になる場合は縮小せず、シェイプの上に左揃えで12pxで表示。
   let fs=12, inside=true;
@@ -7453,7 +7455,7 @@ function renderGanttTaskBar(gg,n,sel){
   t.setAttribute('font-size',String(fs));
   // v8.10: バー内に収まるラベルは文字揃えに従う（既定は従来どおり左詰め）。
   //   収まらずバーの上へ出す場合は、左端に合わせないと隣のバーの文字と重なるので従来のまま。
-  const _ba=(inside&&n.textAlign)?alignH(n.textAlign,_lx,_lw,8):{x:(inside?_lx+8:_lx),anchor:'start'};
+  const _ba=(inside&&n.textAlign)?alignH(n.textAlign,_lx,_lw,8):{x:(inside?_lx+8:_lx+(_lx>n.x+0.01?4:0)),anchor:'start'};   // v8.33追補: 開始日で切ったバーの上に出す文字は、開始日の線から 4px 離す
   t.setAttribute('text-anchor',_ba.anchor);
   if(inside){
     t.setAttribute('x', _ba.x); t.setAttribute('y', n.y+n.h/2); t.setAttribute('dominant-baseline','middle');
@@ -7533,17 +7535,20 @@ function renderGanttPhaseBars(){
     const d=`${dL} L${cutR?x+w-chv:x+w-cap},${yTop+bodyH} ${dR} Z`;
     grp.appendChild(e('path',{d,fill,stroke,'stroke-width':sel?2:1.4,'stroke-linejoin':'round'}));
     // フェーズ名（スパイン上に白で。バーが狭ければ右側に濃色で）
-    const label=p.text||'';
+    // v8.33追補: 開始日（時間軸の左端）より前から始まるフェーズは、名前を開始日から書く（タスクのバーと同じ・ユーザー報告 2026-11-02）。
+    //   lx＝見えている部分の左端・lw＝その幅。開始日より前で終わるフェーズは名前も出さない
+    const lx=Math.max(x,ganttLeftW()), lw=x+w-lx;
+    const label=(lw>0.01)?(p.text||''):'';
     if(label){
-      const ty=yTop+bodyH/2, fits=w>label.length*12+12;
+      const ty=yTop+bodyH/2, fits=lw>label.length*12+12;
       if(fits){
-        const t=e('text',{x:x+8,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:ganttTextOn(fill),'pointer-events':'none'});
-        t.textContent=ganttClip(label,w-14,11); grp.appendChild(t);
+        const t=e('text',{x:lx+8,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:ganttTextOn(fill),'pointer-events':'none'});
+        t.textContent=ganttClip(label,lw-14,11); grp.appendChild(t);
       } else if(ganttWrapOn()&&x+w+6+ganttTextW(label,11)>ganttRightEdge()){
         // v8.08追補③: 段の右にラベルを置く余地が無い場合はバーの中に白字で入れる
         //   （右詰めにするとバーに重なって読めない。折り返しONは段の幅が限られるため起きやすい）。
-        const t=e('text',{x:x+8,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:ganttTextOn(fill),'pointer-events':'none'});
-        t.textContent=ganttClip(label,w-14,11); grp.appendChild(t);
+        const t=e('text',{x:lx+8,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:ganttTextOn(fill),'pointer-events':'none'});
+        t.textContent=ganttClip(label,lw-14,11); grp.appendChild(t);
       } else {
         const t=e('text',{x:x+w+6,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:'#334155','pointer-events':'none'});
         t.textContent=label; grp.appendChild(t);
