@@ -3733,10 +3733,11 @@ function ganttPlace(type,px,py,targetId){
     const byId=targetId?rows.find(n=>n.id===targetId):null;
     const sel=S.sel.length?S.nodes.find(n=>n.id===S.sel[0]&&ganttIsRowNode(n.type)):null;
     const target=byId||sel||ganttRowNodeAt(px,py)||rows[rows.length-1];
-    const ph={id:uid(),type:'gantt_summary',text:dt.shapeTexts?.gantt_summary||SD.gantt_summary.text};
+    const ph={id:uid(),type:'gantt_summary',text:dt.shapeTexts?.gantt_summary||SD.gantt_summary.text,color:ganttNextPhaseColor()};   // v8.33追補: 色を自動で付ける
     S.nodes.push(ph);
     target.phaseId=ph.id;          // 排他: 既存フェーズからは移籍
     ganttPruneEmptyPhases();        // 空になった旧フェーズを掃除
+    ganttSyncPhaseTaskColors(ph);   // v8.33追補: 入れたタスクを新しいフェーズの色に（従来は元のフェーズの色のまま残った）。ほかのタスクの色には触らない
     S.sel=[]; snap(); render();   // v8.05: 配置直後は選択しない
     hint('フェーズ列の上下端ハンドルをドラッグして、包括するタスク範囲を調整');
     return;
@@ -8060,6 +8061,15 @@ function ganttSyncAllTaskColors(){
     if(ph&&ph.color){ n.color=ganttLighten(ph.color,0.80); n.stroke=ph.color; }
     else { delete n.color; delete n.stroke; }   // 無所属＝既定色に戻す
   });
+}
+// v8.33追補: 新しく作るフェーズの色＝フェーズの色の見本（ティール→紺→濃緑→濃紫→茶→濃赤）のうち、まだどのフェーズも使っていない最初の色。
+//   全部使っていればフェーズの数で順に回す。濃灰は色の決まっていないフェーズ（既定の #374151）と見分けがつかないので使わない。
+//   従来は新しいフェーズに色が無く（濃い灰色で描かれ）、中のタスクは既定の青のままで、フェーズとタスクの色がそろわなかった（ユーザー要望 2026-11-02・方針はユーザー決定）
+function ganttNextPhaseColor(){
+  const pal=GANTT_PHASE_COLORS.filter(c=>c.fill.toLowerCase()!=='#374151');
+  const used=new Set(S.nodes.filter(n=>n.type==='gantt_summary'&&n.color).map(n=>String(n.color).toLowerCase()));
+  const free=pal.find(c=>!used.has(c.fill.toLowerCase()));
+  return (free||pal[S.nodes.filter(n=>n.type==='gantt_summary').length%pal.length]).fill;
 }
 // ── ガント: タスク詳細編集モーダル ──
 let _ganttEditId=null, _ganttEditColor=null;
@@ -17257,11 +17267,12 @@ function generateFromMermaidGantt(text){
   let minStart=null; resolved.forEach(r=>{ if(r.start&&(!minStart||r.start<minStart))minStart=r.start; });
   S.gantt=defaultGantt(); if(minStart)S.gantt.startDate=minStart;
   const phaseByName={};
-  parsed.sections.forEach(s=>{ const pid=uid(); phaseByName[s.name]=pid; S.nodes.push({id:pid,type:'gantt_summary',text:s.name}); });
+  parsed.sections.forEach(s=>{ const pid=uid(); phaseByName[s.name]=pid; S.nodes.push({id:pid,type:'gantt_summary',text:s.name,color:ganttNextPhaseColor()}); });   // v8.33追補: 色を自動で
   resolved.forEach((r,i)=>{ const pid=r.section?phaseByName[r.section]:null;
     if(r.milestone) S.nodes.push({id:uid(),type:'gantt_milestone',text:r.name,date:r.start,row:i,phaseId:pid});
     else S.nodes.push({id:uid(),type:'gantt_task',text:r.name,startDate:r.start,endDate:r.end,row:i,progress:0,phaseId:pid}); });
   ganttPruneEmptyPhases();
+  ganttSyncAllTaskColors();   // v8.33追補: タスクをフェーズの色に
   lanePanel(); applyDiagramType();
   snap(); render();
   const lbl=document.getElementById('dtype-label'); if(lbl)lbl.textContent=getDT().name;
@@ -17551,7 +17562,7 @@ function generateFromGanttCsv(text){
   S.gantt=defaultGantt(); if(minStart)S.gantt.startDate=minStart;
   const phaseByName={};
   if(parsed.hasPhase){ const seen=new Set();
-    resolved.forEach(r=>{ const k=r.phase||''; if(k&&!seen.has(k)){ seen.add(k); const pid=uid(); phaseByName[k]=pid; S.nodes.push({id:pid,type:'gantt_summary',text:k}); } }); }
+    resolved.forEach(r=>{ const k=r.phase||''; if(k&&!seen.has(k)){ seen.add(k); const pid=uid(); phaseByName[k]=pid; S.nodes.push({id:pid,type:'gantt_summary',text:k,color:ganttNextPhaseColor()}); } }); }   // v8.33追補: 色を自動で
   resolved.forEach((r,i)=>{
     const pid=(r.phase&&phaseByName[r.phase])?phaseByName[r.phase]:null;
     if(r.milestone){ S.nodes.push({id:uid(),type:'gantt_milestone',text:r.name,date:r.start,row:i,phaseId:pid}); }
@@ -17559,6 +17570,7 @@ function generateFromGanttCsv(text){
       if(r.assignee) n.assignee=r.assignee; S.nodes.push(n); }
   });
   ganttPruneEmptyPhases();
+  ganttSyncAllTaskColors();   // v8.33追補: タスクをフェーズの色に
   lanePanel(); applyDiagramType();
   snap(); render();
   const lbl=document.getElementById('dtype-label'); if(lbl)lbl.textContent=getDT().name;
