@@ -376,7 +376,15 @@ body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;displ
 
 #lane-sec{flex:1;display:flex;flex-direction:column;overflow:hidden;border-top:1px solid #e2e8f0}
 #lane-list{flex:1;overflow-y:auto;padding:6px 8px}
-#gantt-row-list{overflow-y:auto;padding:6px 8px;max-height:42vh}
+#gantt-row-list{overflow-y:auto;padding:6px 8px;max-height:42vh;display:grid;grid-template-columns:minmax(0,1fr);row-gap:3px;column-gap:4px;align-content:start}
+#gantt-row-list.has-phase{grid-template-columns:20px minmax(0,1fr)}   /* v8.33追補: 左にフェーズのパネル */
+#gantt-row-list .lr{margin-bottom:0;min-width:0}
+.gph{position:relative;cursor:grab;user-select:none;min-height:0}
+/* v8.33追補: 形は工程表の左のフェーズの縦帯と同じ（背の上下から右へ脚）。文字は出さない（ユーザー指示）。SVG は絶対配置＝行の高さを押し広げない */
+.gph svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;pointer-events:none}
+.gph.dragging{opacity:.45}
+.gph.drop-before{box-shadow:0 -2px 0 #2563eb}
+.gph.drop-after{box-shadow:0 2px 0 #2563eb}
 .lr{display:flex;align-items:center;gap:4px;padding:4px 5px;margin-bottom:3px;border:1px solid #e2e8f0;border-radius:4px;background:#f9fafb}
 .ldot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1px solid #94a3b8}
 .lname{flex:1;border:none;background:transparent;font-size:12px;color:#374151;outline:none;min-width:0}
@@ -1072,7 +1080,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       </div>
     </div>
     <div id="gantt-list-sec" style="display:none">
-      <div class="ph">タスク一覧<br>（ドラッグで並べ替え）</div>
+      <div class="ph">タスク一覧<br>（ドラッグで並べ替え・左のフェーズも動かせます）</div>
       <div id="gantt-row-list"></div>
     </div>
     <div id="mind-settings" style="display:none">
@@ -2127,6 +2135,35 @@ function ganttAddUnit(date,n,scale){
   else if(scale==='year') d.setFullYear(d.getFullYear()+n);   // v8.08: 折り返し単位「年ごと」用
   return d;
 }
+// v8.33追補: ドラッグで動かした量（dx・図の座標）だけ日付をずらす。日・週・月の目盛りは 1 日ずつ、時の目盛りは 1 時間ずつ
+//   （ユーザー要望 2026-11-02「バーやアイコンのドラッグの最小単位が大きすぎる」＝従来は目盛り 1 つぶん＝週なら 1 週間・月なら 1 か月ずつ）。
+//   unit=true（Shift を押している）なら従来どおり目盛り 1 つぶんずつ。月の目盛りは月ごとに日数が違うので、動かした先の位置にいちばん近い日に寄せる
+function ganttShiftByPx(orig,dx,unit){
+  const g=S.gantt, cw=ganttColW();
+  if(unit||g.scale==='hour'||g.scale==='day') return ganttAddUnit(orig,Math.round(dx/cw),g.scale);
+  const ppd=(g.scale==='week')?cw/7:cw/30, tx=ganttDateToX(orig)+dx;
+  let cur=ganttAddUnit(orig,Math.round(dx/ppd),'day');
+  for(let i=0;i<4;i++){
+    const cx=ganttDateToX(cur), nx=ganttAddUnit(cur,cx<tx?1:-1,'day');
+    if(Math.abs(ganttDateToX(nx)-tx)<Math.abs(cx-tx)) cur=nx; else break;
+  }
+  return cur;
+}
+// v8.33追補: 矢印キーで選んだタスク・マイルストーンを動かす（dir＝−1／+1・unit＝目盛り 1 つぶん）。期間の長さは変えない。履歴は 1 回押すごとに 1 つ
+function ganttNudgeSel(dir,unit){
+  const g=S.gantt, sc=unit?g.scale:ganttShiftStep();
+  const ns=S.nodes.filter(n=>S.sel.includes(n.id)&&ganttIsRowNode(n.type));
+  if(!ns.length) return;
+  ns.forEach(n=>{
+    if(n.type==='gantt_milestone'){ if(n.date) n.date=ganttFmt(ganttAddUnit(n.date,dir,sc),g.scale); }
+    else { if(n.startDate) n.startDate=ganttFmt(ganttAddUnit(n.startDate,dir,sc),g.scale); if(n.endDate) n.endDate=ganttFmt(ganttAddUnit(n.endDate,dir,sc),g.scale); }
+  });
+  snap(); render();
+  const n=ns[0]; hint(ns.length>1?(ns.length+'件を動かしました'):(n.type==='gantt_milestone'?('日付: '+ganttHintD(n.date)):('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate))));
+}
+// v8.33追補: a から b へ何日（時の目盛りは何時間）ずれたか。期間を保ったまま動かすときに、終わりの日へ同じだけ足すのに使う
+function ganttShiftAmount(a,b){ return S.gantt.scale==='hour'?Math.round(ganttDiffUnit(a,b,'hour')):Math.round(ganttDiffUnit(a,b,'day')); }
+function ganttShiftStep(){ return S.gantt.scale==='hour'?'hour':'day'; }
 // d1 から d2 までの単位数（scale）。週は7日単位、月は暦月差、v8.06: 時は3600秒単位で算出
 function ganttDiffUnit(d1,d2,scale){
   const a=ganttParseDate(d1),b=ganttParseDate(d2);
@@ -3850,7 +3887,7 @@ function drawGanttInsertPreview(t,type,cx,cy){
     const mx=(g.scale==='day'||g.scale==='hour')?sx+ganttColW()/2:sx, r=bh/2;   // calcGanttPositions と同じ位置（日・時は列の中央）
     gp.appendChild(e('polygon',Object.assign({points:`${mx},${y-r} ${mx+r},${y} ${mx},${y+r} ${mx-r},${y}`},ghost)));
   } else {
-    const end=ganttFmt(ganttAddUnit(t.startDate,4,g.scale),g.scale);   // ganttPlace と同じ既定の期間。バーの右端は calcGanttPositions と同じ式
+    const end=ganttNewTaskEnd(t.startDate,g.scale);   // ganttPlace と同じ既定の期間（v8.33追補: 開始日の月末で止める）。バーの右端は calcGanttPositions と同じ式
     const ex=(g.scale==='hour')?ganttDateToX(end):ganttDateToX(ganttAddUnit(end,1,'day'));
     const w=Math.max(4,Math.min(ex,x2)-sx);
     gp.appendChild(e('rect',Object.assign({x:sx,y:y-bh/2,width:w,height:bh,rx:4},ghost)));
@@ -7449,7 +7486,9 @@ function renderGanttTaskBar(gg,n,sel){
     if(sg.hol) at['stroke-dasharray']='4 3';
     grp.appendChild(e('path',at));
   });
-  const label=(_bx1>ganttLeftW()+0.01)?(n.text||''):'';   // v8.33追補: 開始日より前で終わる＝バーが見えないので文字も出さない
+  // v8.33追補: 開始日より前で終わる・完了日（右端）より後から始まる＝バーが見えないので文字も出さない。
+  //   後者は従来、右端からはみ出す文字を右詰めにする処理（v5.00 ②）で、見えないバーの名前だけが右端に出ていた（ユーザー報告 2026-11-02）
+  const label=(_bx1>ganttLeftW()+0.01&&_bx0<ganttRightEdge()-0.01)?(n.text||''):'';
   const t=e('text',{fill:'#1e293b','pointer-events':'none'});
   // v8.08追補③: 折り返しONで段をまたぐバーは、ラベルも「その段に出ている部分」に合わせる。
   //   n.x/n.w は切る前の座標なので、そのまま使うと段の左外＝左情報欄の上に文字が乗る。
@@ -7505,7 +7544,9 @@ function renderGanttMilestone(gg,n,sel){
   const d=SD.gantt_milestone, cx=n.x+n.w/2, cy=n.y+n.h/2, r=n.h/2;
   const grp=e('g');
   grp.appendChild(e('polygon',{points:`${cx},${cy-r} ${cx+r},${cy} ${cx},${cy+r} ${cx-r},${cy}`,fill:n.color||d.fill,stroke:sel?'#2563eb':(n.stroke||d.stroke),'stroke-width':sel?2.5:1.2}));
-  if(n.text){
+  // v8.33追補: ひし形の中心が開始日より前・完了日（右端）より後なら、ひし形が見えないので名前も出さない
+  //   （従来は右端に寄せて名前だけが出た・開始日より前は名前の半分がタスク名の列の境目にのぞいた）
+  if(n.text&&cx>=ganttLeftW()&&cx<=ganttRightEdge()){
     // v4.30: マイルストーンの文字はシェイプの上に中央揃えで表示（旧: 右横・縦中央）
     const t=e('text',{x:cx,y:n.y-3,'text-anchor':'middle','dominant-baseline':'auto','font-size':'12',fill:'#1e293b','pointer-events':'none'});
     // v5.00 ②: 完了日で表示範囲を区切ったとき、右端(SVG_W)からはみ出すマイルストーン文字も右詰めに。
@@ -7549,7 +7590,7 @@ function renderGanttPhaseBars(){
     // フェーズ名（スパイン上に白で。バーが狭ければ右側に濃色で）
     // v8.33追補: 開始日（時間軸の左端）より前から始まるフェーズは、名前を開始日から書く（タスクのバーと同じ・ユーザー報告 2026-11-02）。
     //   lx＝見えている部分の左端・lw＝その幅。開始日より前で終わるフェーズは名前も出さない
-    const lx=Math.max(x,ganttLeftW()), lw=x+w-lx;
+    const lx=Math.max(x,ganttLeftW()), lw=Math.min(x+w,ganttRightEdge())-lx;   // v8.33追補: 完了日（右端）より後から始まるフェーズも名前を出さない
     const label=(lw>0.01)?(p.text||''):'';
     if(label){
       const ty=yTop+bodyH/2, fits=lw>label.length*12+12;
@@ -7602,10 +7643,11 @@ function renderGanttNameCol(){
       dt.textContent=ganttClip(_ds, nw-14, _dfs); gg.appendChild(dt);
     }
     // クリックで選択・ダブルクリックで名称編集・右クリック削除（他のフェーズ表現と連動）
-    const hit=e('rect',{class:'g-hit',x:bx,y:s.top,width:nw,height:s.height,fill:'transparent',cursor:'pointer'});   // v8.32: g-hit＝ganttPlaceableTarget
+    const hit=e('rect',{class:'g-hit',x:bx,y:s.top,width:nw,height:s.height,fill:'transparent',cursor:'grab'});   // v8.32: g-hit＝ganttPlaceableTarget／v8.33追補: ドラッグで順序を入れ替え
     hit.addEventListener('mousedown',ev=>{ev.stopPropagation();S.sel=[p.id];
       if(nodeClickTimer!==null){clearTimeout(nodeClickTimer);nodeClickTimer=null;}
-      nodeClickTimer=setTimeout(()=>{nodeClickTimer=null;render();},220);});
+      nodeClickTimer=setTimeout(()=>{nodeClickTimer=null;render();},220);
+      ganttStartPhaseMove(ev,p.id);});
     hit.addEventListener('dblclick',ev=>{ev.stopPropagation();
       if(nodeClickTimer!==null){clearTimeout(nodeClickTimer);nodeClickTimer=null;}openGanttEditor(p.id);});
     hit.addEventListener('contextmenu',ev=>{ev.stopPropagation();ev.preventDefault();S.sel=[p.id];delSel();});
@@ -7758,9 +7800,11 @@ function renderGanttPhases(){
       t.textContent=ganttClip(p.text, Math.max(12,bot-top-10), 12); grp.appendChild(t);
     }
     // 本体: 選択(220msタイマー)・ダブルクリックで名称編集・右クリック削除
+    //   v8.33追補: 上下にドラッグするとフェーズの順序を入れ替える（中のタスクも一緒に動く）
     grp.addEventListener('mousedown',ev=>{ev.stopPropagation();S.sel=[p.id];
       if(nodeClickTimer!==null){clearTimeout(nodeClickTimer);nodeClickTimer=null;}
-      nodeClickTimer=setTimeout(()=>{nodeClickTimer=null;render();},220);});
+      nodeClickTimer=setTimeout(()=>{nodeClickTimer=null;render();},220);
+      ganttStartPhaseMove(ev,p.id);});
     grp.addEventListener('dblclick',ev=>{ev.stopPropagation();
       if(nodeClickTimer!==null){clearTimeout(nodeClickTimer);nodeClickTimer=null;}openGanttEditor(p.id);});
     grp.addEventListener('contextmenu',ev=>{ev.stopPropagation();ev.preventDefault();S.sel=[p.id];delSel();});
@@ -7829,6 +7873,17 @@ function ganttNodeMD(ev,id){
   // ※ ここで render() しない（要素が差し替わるとダブルクリック編集が成立しないため）。
   //   選択描画は mouseup の未移動分岐で 220ms タイマー経由で行う（通常ノードと同方式）。
 }
+// v8.33追補: フェーズの縦帯・見出しの行を押した＝上下に 3px 以上動かしたらフェーズの並べ替え（動かさなければ従来どおり選択）
+function ganttStartPhaseMove(ev,phaseId){
+  if(ev.button!==0||S.mode!=='select') return;
+  const pt=svgPt(ev);
+  ganttDragState={mode:'phase-move',nid:phaseId,startX:pt.x,startY:pt.y,moved:false,target:null};
+}
+// v8.33追補: フェーズの並べ替えの途中で Esc＝中止（離すまで図は書き換えないので、状態を捨てて描き直すだけ）
+document.addEventListener('keydown',ev=>{
+  if(ev.key!=='Escape'||!ganttDragState||ganttDragState.mode!=='phase-move') return;
+  ev.preventDefault(); ev.stopPropagation(); ganttDragState=null; render(); hint('フェーズの並べ替えを中止しました');
+},true);
 // リサイズ/進捗ハンドルのドラッグ開始
 function ganttStartDrag(ev,id,mode){
   if(ev.button!==0)return;
@@ -7878,6 +7933,59 @@ function ganttReorderRowInsert(nid,insertIdx){
   list.splice(insertIdx,0,moved);
   ganttReorderTo(nid,list);   // v4.13: ブロック整合＋付替え
   snap(); render();
+}
+// v8.33追補: フェーズの並べ替え（ユーザー要望 2026-11-02「フェーズごとに順序を入れ替えたい・中のタスクはフェーズごと一緒に動く」）。
+//   行（タスク・マイルストーン）を「まとまり」に分ける＝同じフェーズの続いた行で 1 つ・フェーズの無い行は 1 行ずつ。
+//   フェーズはまとまりの境目にだけ入れる（ほかのフェーズの途中には入れない）。中のタスクの所属（phaseId）は変えない
+function ganttRowUnits(){
+  const units=[];
+  ganttNodesSorted().forEach(n=>{ const last=units[units.length-1];
+    if(n.phaseId&&last&&last.phaseId===n.phaseId) last.nodes.push(n);
+    else units.push({phaseId:n.phaseId||null,nodes:[n]}); });
+  return units;
+}
+// フェーズのまとまりを、動かす前の並びで at 番目（0〜まとまりの数）の境目へ。動いたら true
+function ganttMovePhaseTo(phaseId,at){
+  const units=ganttRowUnits(), mine=[], rest=[];
+  let before=0;   // at より前にある自分のまとまりの数（取り除いたぶん at を詰める）
+  units.forEach((u,i)=>{ if(u.phaseId===phaseId){ mine.push(u); if(i<at) before++; } else rest.push(u); });
+  if(!mine.length) return false;
+  const pos=Math.max(0,Math.min(rest.length,at-before));
+  const order=rest.slice(0,pos).concat(mine,rest.slice(pos)).flatMap(u=>u.nodes);
+  const changed=order.some((n,i)=>(n.row||0)!==i);
+  order.forEach((n,i)=>{ n.row=i; });
+  return changed;
+}
+// 工程表でフェーズをドラッグしている位置 y から、入る境目を決める（まとまりの上半分＝その前・下半分＝その後）。
+//   折り返し表示は y のある段の行の並びで判定する（挿入プレビュー ganttInsertTarget と同じ考え方）。lineY＝青い線の位置（図の座標）。
+//   自分のまとまりの上なら at=null（動かさない）
+function ganttPhaseMoveTarget(phaseId,y){
+  const units=ganttRowUnits(); if(!units.length) return null;
+  const bs=ganttBands(), band=(ganttWrapOn()&&bs.length)?ganttBandAtY(y):null, dy=(band!=null)?bs[band].dy:0;
+  const sv=_gwBand; _gwBand=band; const L=ganttLayout(); _gwBand=sv;
+  const ly=y-dy, unitOf=id=>units.findIndex(u=>u.phaseId===id||u.nodes.some(n=>n.id===id));
+  const slots=L.slots.filter(x=>x.node&&(x.kind==='task'||x.kind==='phase'));
+  if(!slots.length) return null;
+  let sl=slots.find(x=>ly>=x.top&&ly<x.top+x.height);
+  if(!sl) sl=(ly<slots[0].top)?slots[0]:slots[slots.length-1];
+  const ui=unitOf(sl.node.id); if(ui<0) return null;
+  if(units[ui].phaseId===phaseId) return {at:null};
+  const mine=slots.filter(x=>unitOf(x.node.id)===ui);   // そのまとまりのうち、この段に見えている行（フェーズの見出しの行を含む）
+  const top=mine[0].top, bot=mine[mine.length-1].top+mine[mine.length-1].height, after=ly>=(top+bot)/2;
+  return {at:ui+(after?1:0),lineY:(after?bot:top)+dy,band};
+}
+// 入る境目に青い線（両端に●・挿入プレビューと同じ形）。固定表示中はタスク名の列の重ね箱が線の左を覆うので、重ね箱にも同じ線を描く
+function drawGanttPhaseMoveIndicator(t){
+  if(!t||t.at==null) return;
+  const sv=_gwBand; _gwBand=t.band;
+  const x1=0, x2=ganttRightEdge(), y=t.lineY, C='#2563eb';
+  _gwBand=sv;
+  const line=()=>{ const gl=e('g',{class:'ui-only','pointer-events':'none'});
+    gl.appendChild(e('line',{x1,y1:y,x2,y2:y,stroke:C,'stroke-width':2.5}));
+    [x1+4,x2-4].forEach(x=>gl.appendChild(e('circle',{cx:x,cy:y,r:4,fill:C})));
+    return gl; };
+  document.getElementById('g-dividers').appendChild(line());
+  if(ganttStickyOn()) document.getElementById('g-gantt-left').appendChild(line());
 }
 // 一覧の名称入力から text を更新（再構築せず focus 維持 → ganttPanel の focus ガードで担保）
 function ganttRenameRow(id,v){const n=S.nodes.find(x=>x.id===id);if(n){n.text=v;render();}}
@@ -12627,27 +12735,35 @@ function onDocMouseMove(ev){   // v8.23: 無名関数から切り出し＝edgeAu
       if(cols[gs.colIdx]){ cols[gs.colIdx].width=newW; if(cols.length===1) g.nameW=newW; }
       render(); return;
     }
+    if(gs.mode==='phase-move'){   // v8.33追補: フェーズの並べ替え（入る境目に青い線）
+      gs.target=ganttPhaseMoveTarget(gs.nid,pt.y);
+      render(); drawGanttPhaseMoveIndicator(gs.target);
+      hint('上下にドラッグでフェーズの順序を入れ替え（中のタスクも一緒に動きます・Esc で中止）'); return;
+    }
     const n=S.nodes.find(x=>x.id===gs.nid); if(!n)return;
-    const du=Math.round((pt.x-gs.startX)/ganttColW());
+    // v8.33追補: 1 日ずつ（時の目盛りは 1 時間ずつ）動かす。Shift を押している間は従来どおり目盛り 1 つぶんずつ（ganttShiftByPx）
+    const dx=pt.x-gs.startX, unit=!!ev.shiftKey, tip=unit?'（離すと確定）':'（離すと確定・Shift で目盛りごと）';
     if(gs.mode==='move'){
       if(n.type==='gantt_milestone'){
-        n.date=ganttFmt(ganttAddUnit(gs.orig.date,du,g.scale),g.scale);   // v8.06: 時モードは時刻付き
-        render(); hint('日付: '+ganttHintD(n.date)+'（離すと確定）'); return;   // v8.21: リアルタイム表示
+        n.date=ganttFmt(ganttShiftByPx(gs.orig.date,dx,unit),g.scale);   // v8.06: 時モードは時刻付き
+        render(); hint('日付: '+ganttHintD(n.date)+tip); return;   // v8.21: リアルタイム表示
       } else {
-        n.startDate=ganttFmt(ganttAddUnit(gs.orig.startDate,du,g.scale),g.scale);
-        n.endDate=ganttFmt(ganttAddUnit(gs.orig.endDate,du,g.scale),g.scale);
+        const ns=ganttShiftByPx(gs.orig.startDate,dx,unit);
+        n.startDate=ganttFmt(ns,g.scale);
+        // 期間の長さを保つ: 目盛りごとなら終わりも目盛りで・日ごとなら終わりにも同じ日数（時間）を足す
+        n.endDate=ganttFmt(unit?ganttAddUnit(gs.orig.endDate,Math.round(dx/ganttColW()),g.scale):ganttAddUnit(gs.orig.endDate,ganttShiftAmount(gs.orig.startDate,ns),ganttShiftStep()),g.scale);
       }
-      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+'（離すと確定）'); return;
+      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+tip); return;
     }
     if(gs.mode==='resize-left'){
-      const nd=ganttFmt(ganttAddUnit(gs.orig.startDate,du,g.scale),g.scale);   // v8.06
+      const nd=ganttFmt(ganttShiftByPx(gs.orig.startDate,dx,unit),g.scale);   // v8.06
       if(ganttDiffUnit(nd,n.endDate,g.scale)>=0) n.startDate=nd;
-      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+'（離すと確定）'); return;
+      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+tip); return;
     }
     if(gs.mode==='resize-right'){
-      const nd=ganttFmt(ganttAddUnit(gs.orig.endDate,du,g.scale),g.scale);   // v8.06
+      const nd=ganttFmt(ganttShiftByPx(gs.orig.endDate,dx,unit),g.scale);   // v8.06
       if(ganttDiffUnit(n.startDate,nd,g.scale)>=0) n.endDate=nd;
-      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+'（離すと確定）'); return;
+      render(); hint('期間: '+ganttHintD(n.startDate)+' 〜 '+ganttHintD(n.endDate)+tip); return;
     }
     if(gs.mode==='progress'){
       n.progress=Math.round(Math.max(0,Math.min(100,(pt.x-n.x)/n.w*100)));
@@ -13452,6 +13568,10 @@ document.addEventListener('mouseup',ev=>{   // v8.15追補: 繋ぎ替え確定�
     const gs=ganttDragState; ganttDragState=null;
     if(gs.mode==='row'&&gs.moved&&gs.targetRow!=null) ganttReorderRow(gs.nid,gs.targetRow);
     if(gs.mode==='phase-edge'&&gs.moved&&gs.preview) ganttApplyPhaseRange(gs.nid,gs.preview.top,gs.preview.bot);   // v4.12 Step C
+    if(gs.mode==='phase-move'&&gs.moved){   // v8.33追補: 動いたときだけ履歴に積む
+      const ch=!!(gs.target&&gs.target.at!=null&&ganttMovePhaseTo(gs.nid,gs.target.at));
+      if(ch) snap(); render(); return;
+    }
     if(gs.moved){ snap(); render(); }
     else {
       // 未移動（クリック）: 選択描画を 220ms 遅延（ダブルクリック編集と排他）。
@@ -14604,6 +14724,11 @@ document.addEventListener('keydown',ev=>{
   if((ev.ctrlKey||ev.metaKey)&&(ev.key==='a'||ev.key==='A')){ev.preventDefault();if(!pasteMode)selectAll();return;}
   // グループ化（Ctrl+G）／グループ解除（Ctrl+Shift+G）— v4.09 D-2
   if((ev.ctrlKey||ev.metaKey)&&(ev.key==='g'||ev.key==='G')){ev.preventDefault();if(ev.shiftKey)ungroupSel();else groupSel();return;}
+  // v8.33追補: ガントは ← → で選んだタスク・マイルストーンを 1 日（時の目盛りは 1 時間）ずつ、Shift＋← → で目盛り 1 つぶんずつ動かす
+  //   （従来はガントでは矢印キーが効かなかった＝nudgeSel がガントを対象外にしている）。↑↓ は何もしない
+  if(S.diagramType==='gantt'&&!pasteMode&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&S.sel.length&&(ev.key==='ArrowLeft'||ev.key==='ArrowRight')){
+    ev.preventDefault(); ganttNudgeSel(ev.key==='ArrowLeft'?-1:1,ev.shiftKey); return;
+  }
   // 矢印キー微移動（nudge）: 1px、Shiftで10px — v4.03 D-1
   if(!pasteMode&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&S.sel.length&&
      (ev.key==='ArrowUp'||ev.key==='ArrowDown'||ev.key==='ArrowLeft'||ev.key==='ArrowRight')){
@@ -14659,6 +14784,10 @@ function lanePanel(){
   });
 }
 // ── ガント: タスク/サマリー一覧（サイドバー・ドラッグで並べ替え）v4.08 ──
+//   v8.33追補: 各タスクの左にフェーズのパネル（フェーズの色・縦書きの名前・中のタスクの行にまたがる）を出し、どのタスクがどのフェーズに
+//   入っているかを見えるようにした。パネルを上下にドラッグするとフェーズの順序が入れ替わる（中のタスクも一緒・ganttMovePhaseTo）。
+//   パネルのクリックで工程表のフェーズを選ぶ・ダブルクリックで編集画面（ユーザー要望 2026-11-02）
+let ganttPhaseDragSrc=null;   // v8.33追補: サイドバーでドラッグ中のフェーズの id
 function ganttPanel(){
   const list=document.getElementById('gantt-row-list'); if(!list)return;
   if(S.diagramType!=='gantt'){ list.innerHTML=''; return; }
@@ -14666,8 +14795,48 @@ function ganttPanel(){
   if(document.activeElement&&list.contains(document.activeElement))return;
   list.innerHTML='';
   const COLOR={gantt_task:'#3b82f6',gantt_summary:'#374151',gantt_milestone:'#f59e0b'};
-  ganttNodesSorted().forEach(n=>{
-    const row=document.createElement('div'); row.className='lr'; row.dataset.gid=n.id;
+  const units=ganttRowUnits(), hasPh=units.some(u=>u.phaseId);
+  list.classList.toggle('has-phase',hasPh);
+  const clearMarks=()=>list.querySelectorAll('.drop-before,.drop-after').forEach(x=>x.classList.remove('drop-before','drop-after'));
+  // フェーズのドラッグ中: 指している「まとまり」の上半分＝その前・下半分＝その後に入る（印はまとまりの最初の行の上／最後の行の下）
+  const unitRect=ui=>{ let t=1e9,b=-1e9; list.querySelectorAll(`[data-unit="${ui}"]`).forEach(x=>{ const r=x.getBoundingClientRect(); t=Math.min(t,r.top); b=Math.max(b,r.bottom); }); return {top:t,bottom:b}; };
+  const phaseTarget=(el,ev)=>{ const ui=+el.dataset.unit, u=units[ui]; if(!u||u.phaseId===ganttPhaseDragSrc) return null;
+    const r=unitRect(ui); return {ui,after:ev.clientY>(r.top+r.bottom)/2}; };
+  const phaseOver=(el,ev)=>{ if(!ganttPhaseDragSrc) return false; const t=phaseTarget(el,ev); clearMarks(); if(!t) return true;
+    ev.preventDefault();
+    const els=[...list.querySelectorAll(`.lr[data-unit="${t.ui}"]`)], mark=t.after?els[els.length-1]:els[0];
+    if(mark) mark.classList.add(t.after?'drop-after':'drop-before');
+    list.querySelector(`.gph[data-unit="${t.ui}"]`)?.classList.add(t.after?'drop-after':'drop-before');
+    return true; };
+  const phaseDrop=(el,ev)=>{ if(!ganttPhaseDragSrc) return false; ev.preventDefault(); const t=phaseTarget(el,ev), src=ganttPhaseDragSrc;
+    clearMarks(); ganttPhaseDragSrc=null;
+    if(t&&ganttMovePhaseTo(src,t.ui+(t.after?1:0))){ snap(); render(); }
+    return true; };
+  let gr=1;
+  units.forEach((u,ui)=>{
+    const ph=u.phaseId?S.nodes.find(x=>x.id===u.phaseId):null;
+    if(ph){
+      const fill=ph.color||SD.gantt_summary.fill, name=ph.text||'(無題フェーズ)';
+      const pn=document.createElement('div');
+      const sel=S.sel.includes(ph.id);
+      pn.className='gph'; pn.dataset.unit=ui; pn.draggable=true;
+      pn.style.cssText=`grid-column:1;grid-row:${gr} / span ${u.nodes.length}`;
+      pn.title=name+'（上下にドラッグで順序を入れ替え・中のタスクも一緒に動きます／ダブルクリックで編集）';
+      // v8.33追補: 工程表の縦帯（renderGanttPhases）と同じ形・色・枠（選んでいると青い枠）。名前は書かない（ユーザー指示 2026-11-02）
+      Object.assign(pn.dataset,{rows:u.nodes.length,fill,stroke:sel?'#2563eb':(ph.stroke||SD.gantt_summary.stroke),sw:sel?2:1.4});
+      pn.addEventListener('dragstart',ev=>{ ganttPhaseDragSrc=ph.id; pn.classList.add('dragging');
+        list.querySelectorAll(`.lr[data-unit="${ui}"]`).forEach(x=>x.classList.add('dragging'));
+        ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',ph.id); });
+      pn.addEventListener('dragend',()=>{ ganttPhaseDragSrc=null; list.querySelectorAll('.dragging').forEach(x=>x.classList.remove('dragging')); clearMarks(); });
+      pn.addEventListener('dragover',ev=>phaseOver(pn,ev));
+      pn.addEventListener('drop',ev=>phaseDrop(pn,ev));
+      pn.addEventListener('click',()=>{ S.sel=[ph.id]; render(); });
+      pn.addEventListener('dblclick',()=>openGanttEditor(ph.id));
+      list.appendChild(pn);
+    }
+    u.nodes.forEach(n=>{
+    const row=document.createElement('div'); row.className='lr'; row.dataset.gid=n.id; row.dataset.unit=ui;
+    row.style.gridColumn=hasPh?'2':'1'; row.style.gridRow=String(gr++);
     const bold='';   // v4.17: 一覧はタスク／マイルストーンのみ（フェーズは別列のため非掲載・インデントなし）
     row.innerHTML=`<div class="lhandle" draggable="true" title="ドラッグで並べ替え">⠿</div>
 <div class="ldot" style="background:${(S.nodes.find(x=>x.id===n.phaseId)||{}).color||COLOR[n.type]||'#94a3b8'}"></div>
@@ -14677,6 +14846,7 @@ function ganttPanel(){
     handle.addEventListener('dragstart',ev=>{ganttRowDragSrc=n.id;row.classList.add('dragging');ev.dataTransfer.effectAllowed='move';ev.dataTransfer.setData('text/plain',n.id);});
     handle.addEventListener('dragend',()=>{ganttRowDragSrc=null;document.querySelectorAll('#gantt-row-list .lr').forEach(r=>r.classList.remove('dragging','drop-before','drop-after'));});
     row.addEventListener('dragover',ev=>{
+      if(phaseOver(row,ev)) return;   // v8.33追補: フェーズのパネルをドラッグ中
       if(!ganttRowDragSrc||ganttRowDragSrc===n.id)return;
       ev.preventDefault();
       const r=row.getBoundingClientRect(), after=ev.clientY>r.top+r.height/2;
@@ -14684,6 +14854,7 @@ function ganttPanel(){
     });
     row.addEventListener('dragleave',()=>row.classList.remove('drop-before','drop-after'));
     row.addEventListener('drop',ev=>{
+      if(phaseDrop(row,ev)) return;   // v8.33追補
       ev.preventDefault();
       row.classList.remove('drop-before','drop-after');
       if(!ganttRowDragSrc||ganttRowDragSrc===n.id)return;
@@ -14693,6 +14864,18 @@ function ganttPanel(){
       ganttRowDragSrc=null;
     });
     list.appendChild(row);
+    });
+  });
+  // v8.33追補: フェーズのパネルの形＝工程表の縦帯と同じ（左に背・上下の端が右へ脚）。背の幅は縦帯と同じ割合（脚の先まで幅の 54%）、
+  //   脚の伸びも縦帯と同じ式。高さはタスクの行の高さから求める（一覧が隠れていて測れなくても形が作れる）。SVG は枠いっぱいに伸び縮みする
+  const rowH=(list.querySelector('.lr')?.getBoundingClientRect().height)||24, W=20;
+  list.querySelectorAll('.gph').forEach(g=>{
+    const k=+g.dataset.rows||1, h=k*rowH+(k-1)*3, sw=+g.dataset.sw, top=sw/2, bot=h-sw/2;
+    const xs=sw/2, xL2=W-sw/2, xb=xs+(xL2-xs)*0.54, cap=Math.min(13,Math.max(6,(bot-top)*0.18));
+    const svg=e('svg',{viewBox:`0 0 ${W} ${h}`,preserveAspectRatio:'none'});   // 色はファイルの値なので文字列の HTML に入れず属性で入れる
+    svg.appendChild(e('path',{d:`M${xs},${top} L${xL2},${top} L${xb},${top+cap} L${xb},${bot-cap} L${xL2},${bot} L${xs},${bot} Z`,
+      fill:g.dataset.fill,stroke:g.dataset.stroke,'stroke-width':sw,'stroke-linejoin':'round','vector-effect':'non-scaling-stroke'}));
+    g.replaceChildren(svg);
   });
 }
 
@@ -17953,9 +18136,9 @@ function selHintMsg(){
   }
   if(S.diagramType==='gantt'){
     const n=nodes[0]; if(!n)return null;
-    if(n.type==='gantt_summary')return 'フェーズ: 上下端のハンドルで包括するタスク範囲を調整 / Dblクリックで詳細編集';
-    if(n.type==='gantt_milestone')return 'ドラッグで日付を移動 / Dblクリックで詳細編集';
-    return 'ドラッグで期間を移動 / 両端のハンドルで伸縮 / Dblクリックで詳細編集';
+    if(n.type==='gantt_summary')return 'フェーズ: 上下にドラッグで順序を入れ替え / 上下端のハンドルで包括するタスク範囲を調整 / Dblクリックで詳細編集';   // v8.33追補
+    if(n.type==='gantt_milestone')return 'ドラッグで日付を移動（1 日ずつ・Shift で目盛りごと）/ ←→キーでも移動 / Dblクリックで詳細編集';   // v8.33追補
+    return 'ドラッグで期間を移動（1 日ずつ・Shift で目盛りごと）/ 両端のハンドルで伸縮 / ←→キーでも移動 / Dblクリックで詳細編集';
   }
   if(nodes.length>=2)
     return 'ドラッグでまとめて移動 / Deleteでまとめて削除'+(groupingAllowed()?' / 「整列」「グループ化」が使えます':'');
