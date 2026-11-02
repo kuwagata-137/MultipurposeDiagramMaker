@@ -656,6 +656,8 @@ body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;displ
 .gm-cols-cell>span{flex:0 0 auto;color:#94a3b8}
 .gm-field .gm-cols-cell input[type=text]{flex:1 1 0;width:auto;min-width:0}
 .gm-field .gm-cols-cell input.l{flex:0 0 38%}
+.gm-cols-cell textarea.v{flex:1 1 0;width:auto;min-width:0;resize:none;overflow:hidden;font-family:inherit;font-size:13px;line-height:18px;padding:7px 9px;border:1.5px solid #e2e8f0;border-radius:6px;box-sizing:border-box;outline:none;display:block}   /* v8.33追補: 本文は改行できる欄（見た目は 1 行の入力欄と同じ） */
+.gm-cols-cell textarea.v:focus{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.12)}
 .gm-cols-add{position:sticky;right:0;box-shadow:-9px 0 0 #fff;margin-left:8px;border:1.5px dashed #94a3b8;   /* 列が多く表が横にスクロールしても右端に見えたまま（影＝左の隙間を白で埋める） */border-radius:7px;background:#f8fafc;color:#475569;font-size:12px;font-weight:700;font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;line-height:1.35;cursor:pointer;padding:4px}
 .gm-cols-add b{font-size:18px;line-height:1}
 .gm-cols-add:hover{border-color:#3b82f6;color:#2563eb;background:#eff6ff}
@@ -3688,20 +3690,54 @@ function placeShape(type,px,py){
   }
 }
 // ── ガントチャート: タスク配置 ──
+// v8.33追補: 新しいタスクの終了日の既定＝開始日から 4 目盛りぶん。ただし開始日と同じ月の中に収める（月末で止める）。
+//   従来は 4 目盛りそのままで、週の目盛りなら 4 週後・月の目盛りなら 4 か月後になり、先の日程になりすぎた（ユーザー要望 2026-11-02）。
+//   時の目盛りは +4 時間のまま（月をまたぐのは月末の夜だけで、その日の 23 時で止める）
+function ganttNewTaskEnd(startDate,scale){
+  const s=ganttParseDate(startDate), e=ganttParseDate(ganttAddUnit(startDate,4,scale));
+  if(e.getFullYear()===s.getFullYear()&&e.getMonth()===s.getMonth()) return ganttFmt(e,scale);
+  const last=(scale==='hour')?new Date(s.getFullYear(),s.getMonth(),s.getDate(),23):new Date(s.getFullYear(),s.getMonth()+1,0);
+  return ganttFmt(last,scale);
+}
 function ganttMaxRow(){let m=-1;S.nodes.forEach(n=>{if(n.type==='gantt_task'||n.type==='gantt_milestone')m=Math.max(m,n.row||0);});return m;}
-function ganttPlace(type,px,py){
+// v8.33追補: パレットの「フェーズ」を選んで、配置を待っているか（ユーザー報告 2026-11-02「フェーズを左クリックだけで置けない」）
+function ganttPhaseArmed(){ return S.diagramType==='gantt'&&S.mode==='select'&&activePal==='gantt_summary'; }
+// v8.33追補: 押した位置の行のタスク／マイルストーン（行の無い所・フェーズの見出しの行は null）。折り返し・固定表示の読み替えは ganttInsertTarget と同じ
+function ganttRowNodeAt(px,py){
+  ({x:px,y:py}=ganttStickyPt(px,py));
+  if(ganttLocalY(py)<ganttBodyTop()) return null;
+  const bs=ganttBands(), band=(ganttWrapOn()&&bs.length)?ganttBandAtY(py):null;
+  const dy=(band!=null)?bs[band].dy:0;
+  const sv=_gwBand; _gwBand=band;
+  const L=ganttLayout(); _gwBand=sv;
+  const y=py-dy, s=L.slots.find(s=>s.kind==='task'&&s.node&&y>=s.top&&y<s.top+s.height);
+  return s?s.node:null;
+}
+// v8.33追補: フェーズの配置を待っている間に、タスクのバー・タスク名の欄を押した＝選択やドラッグにせず、離したときにそのタスクでフェーズを作る
+//   （置くのは離したとき＝v8.29 のクリック配置と同じ。左右同時押し・Esc で取り消せる）。待っていなければ false＝ふだんの処理へ
+function ganttPhasePressOnRow(ev,n){
+  if(!ganttPhaseArmed()||!n||!ganttIsRowNode(n.type)||ev.button!==0) return false;
+  palPlaceState={type:'gantt_summary',nid:n.id};
+  return true;
+}
+function ganttPlace(type,px,py,targetId){
   const g=S.gantt;
   const dt=getDT();
   // フェーズ（v4.17）: 行ではなく、選択タスク（なければ最下タスク）を初期メンバーにした縦バンドを作る
+  // v8.33追補: 中身にするタスクの決め方＝①押したバー・タスク名のタスク（targetId）②選んでいるタスク（v8.32追補 B-4・マニュアルの手順）
+  //   ③押した位置の行のタスク ④いちばん下のタスク。従来は①③が無く、行の空いた所を押してもいちばん下のタスクになり、
+  //   バーやタスク名を押すと選択になるだけで置かれなかった（ユーザー報告 2026-11-02）
   if(type==='gantt_summary'){
     const rows=ganttNodesSorted();
     if(!rows.length){ hint('先にタスク／マイルストーンを配置してください'); return; }
+    const byId=targetId?rows.find(n=>n.id===targetId):null;
     const sel=S.sel.length?S.nodes.find(n=>n.id===S.sel[0]&&ganttIsRowNode(n.type)):null;
-    const target=sel||rows[rows.length-1];
-    const ph={id:uid(),type:'gantt_summary',text:dt.shapeTexts?.gantt_summary||SD.gantt_summary.text};
+    const target=byId||sel||ganttRowNodeAt(px,py)||rows[rows.length-1];
+    const ph={id:uid(),type:'gantt_summary',text:dt.shapeTexts?.gantt_summary||SD.gantt_summary.text,color:ganttNextPhaseColor()};   // v8.33追補: 色を自動で付ける
     S.nodes.push(ph);
     target.phaseId=ph.id;          // 排他: 既存フェーズからは移籍
     ganttPruneEmptyPhases();        // 空になった旧フェーズを掃除
+    ganttSyncPhaseTaskColors(ph);   // v8.33追補: 入れたタスクを新しいフェーズの色に（従来は元のフェーズの色のまま残った）。ほかのタスクの色には触らない
     S.sel=[]; snap(); render();   // v8.05: 配置直後は選択しない
     hint('フェーズ列の上下端ハンドルをドラッグして、包括するタスク範囲を調整');
     return;
@@ -3723,7 +3759,7 @@ function ganttPlace(type,px,py){
   } else {
     n.text=dt.shapeTexts?.[type]||SD[type].text;
     n.startDate=startDate;
-    n.endDate=ganttFmt(ganttAddUnit(startDate,4,g.scale),g.scale);   // v8.06: 時モードは+4時間・時刻付き
+    n.endDate=ganttNewTaskEnd(startDate,g.scale);   // v8.06: 時モードは+4時間・時刻付き／v8.33追補: 開始日の月の中に収める
     n.progress=0;
     // v8.32（計画外の修正）: 色の付いたフェーズに入れたら、そのフェーズの配下と同じ色にする。従来はフェーズ（phaseId）だけ入れて
     //   色を合わせておらず、新しいタスクだけ既定の青になっていた。同じフェーズに色の付いたタスクがあればその色をそのまま使う
@@ -7413,11 +7449,13 @@ function renderGanttTaskBar(gg,n,sel){
     if(sg.hol) at['stroke-dasharray']='4 3';
     grp.appendChild(e('path',at));
   });
-  const label=n.text||'';
+  const label=(_bx1>ganttLeftW()+0.01)?(n.text||''):'';   // v8.33追補: 開始日より前で終わる＝バーが見えないので文字も出さない
   const t=e('text',{fill:'#1e293b','pointer-events':'none'});
   // v8.08追補③: 折り返しONで段をまたぐバーは、ラベルも「その段に出ている部分」に合わせる。
   //   n.x/n.w は切る前の座標なので、そのまま使うと段の左外＝左情報欄の上に文字が乗る。
-  const _lx=ganttWrapOn()?_bx0:n.x, _lw=ganttWrapOn()?(_bx1-_bx0):n.w;
+  // v8.33追補: 開始日（時間軸の左端）より前から始まるバーは、文字も開始日から書く。従来は n.x（バーの本当の左端）から書いたため、
+  //   文字が開始日より左＝タスク名の列の下に入って見えなかった（ユーザー報告 2026-11-02）。開始日より前で終わるバーは文字も出さない
+  const _lx=Math.max(_bx0,ganttLeftW()), _lw=_bx1-_lx;
   // v4.30: バー内に収まるようフォントを自動縮小（基準fs=12時の所要幅 = len*13+12）。
   //        ただし8px未満になる場合は縮小せず、シェイプの上に左揃えで12pxで表示。
   let fs=12, inside=true;
@@ -7429,7 +7467,7 @@ function renderGanttTaskBar(gg,n,sel){
   t.setAttribute('font-size',String(fs));
   // v8.10: バー内に収まるラベルは文字揃えに従う（既定は従来どおり左詰め）。
   //   収まらずバーの上へ出す場合は、左端に合わせないと隣のバーの文字と重なるので従来のまま。
-  const _ba=(inside&&n.textAlign)?alignH(n.textAlign,_lx,_lw,8):{x:(inside?_lx+8:_lx),anchor:'start'};
+  const _ba=(inside&&n.textAlign)?alignH(n.textAlign,_lx,_lw,8):{x:(inside?_lx+8:_lx+(_lx>n.x+0.01?4:0)),anchor:'start'};   // v8.33追補: 開始日で切ったバーの上に出す文字は、開始日の線から 4px 離す
   t.setAttribute('text-anchor',_ba.anchor);
   if(inside){
     t.setAttribute('x', _ba.x); t.setAttribute('y', n.y+n.h/2); t.setAttribute('dominant-baseline','middle');
@@ -7509,17 +7547,20 @@ function renderGanttPhaseBars(){
     const d=`${dL} L${cutR?x+w-chv:x+w-cap},${yTop+bodyH} ${dR} Z`;
     grp.appendChild(e('path',{d,fill,stroke,'stroke-width':sel?2:1.4,'stroke-linejoin':'round'}));
     // フェーズ名（スパイン上に白で。バーが狭ければ右側に濃色で）
-    const label=p.text||'';
+    // v8.33追補: 開始日（時間軸の左端）より前から始まるフェーズは、名前を開始日から書く（タスクのバーと同じ・ユーザー報告 2026-11-02）。
+    //   lx＝見えている部分の左端・lw＝その幅。開始日より前で終わるフェーズは名前も出さない
+    const lx=Math.max(x,ganttLeftW()), lw=x+w-lx;
+    const label=(lw>0.01)?(p.text||''):'';
     if(label){
-      const ty=yTop+bodyH/2, fits=w>label.length*12+12;
+      const ty=yTop+bodyH/2, fits=lw>label.length*12+12;
       if(fits){
-        const t=e('text',{x:x+8,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:ganttTextOn(fill),'pointer-events':'none'});
-        t.textContent=ganttClip(label,w-14,11); grp.appendChild(t);
+        const t=e('text',{x:lx+8,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:ganttTextOn(fill),'pointer-events':'none'});
+        t.textContent=ganttClip(label,lw-14,11); grp.appendChild(t);
       } else if(ganttWrapOn()&&x+w+6+ganttTextW(label,11)>ganttRightEdge()){
         // v8.08追補③: 段の右にラベルを置く余地が無い場合はバーの中に白字で入れる
         //   （右詰めにするとバーに重なって読めない。折り返しONは段の幅が限られるため起きやすい）。
-        const t=e('text',{x:x+8,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:ganttTextOn(fill),'pointer-events':'none'});
-        t.textContent=ganttClip(label,w-14,11); grp.appendChild(t);
+        const t=e('text',{x:lx+8,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:ganttTextOn(fill),'pointer-events':'none'});
+        t.textContent=ganttClip(label,lw-14,11); grp.appendChild(t);
       } else {
         const t=e('text',{x:x+w+6,y:ty,'dominant-baseline':'middle','font-size':'11','font-weight':'700',fill:'#334155','pointer-events':'none'});
         t.textContent=label; grp.appendChild(t);
@@ -7577,7 +7618,8 @@ function renderGanttNameCol(){
   // 透明ヒット領域: mousedownで行ドラッグ・dblで該当フィールド編集・右クリックで削除
   const addHit=(n,field,x0,y0,w,h)=>{
     const hit=e('rect',{class:'g-hit',x:x0,y:y0,width:Math.max(0,w),height:Math.max(0,h),fill:'transparent',cursor:'default'});  // v4.30: 編集セルのカーソルを手→通常に（v8.32: g-hit＝ganttPlaceableTarget）
-    hit.addEventListener('mousedown',ev=>{ev.stopPropagation();const pt=svgPt(ev);S.sel=[n.id];
+    hit.addEventListener('mousedown',ev=>{ev.stopPropagation();if(ganttPhasePressOnRow(ev,n))return;   // v8.33追補: フェーズの配置待ち＝このタスクで作る
+      const pt=svgPt(ev);S.sel=[n.id];
       ganttDragState={mode:'row',nid:n.id,startX:pt.x,startY:pt.y,moved:false};});
     // v5.01: 情報欄（名称・各セル）のダブルクリックでも編集モーダルを開く（工程バーと同じ編集画面に統一）。
     hit.addEventListener('dblclick',ev=>{ev.stopPropagation();
@@ -7628,7 +7670,7 @@ function renderGanttNameCol(){
     const dateTop=top+pad+lh, di=tx0-bx;
     const dateStr=(lw0?'':'工程：')+((n.type==='gantt_milestone')?ganttDispDate(n.date):(ganttDispDate(n.startDate)+'～'+ganttDispDate(n.endDate)));
     const dhit=e('rect',{class:'g-hit',x:bx,y:dateTop,width:nw,height:lh,fill:'transparent',cursor:'default'});
-    dhit.addEventListener('mousedown',ev=>{ev.stopPropagation();const pt=svgPt(ev);S.sel=[n.id];ganttDragState={mode:'row',nid:n.id,startX:pt.x,startY:pt.y,moved:false};});
+    dhit.addEventListener('mousedown',ev=>{ev.stopPropagation();if(ganttPhasePressOnRow(ev,n))return;const pt=svgPt(ev);S.sel=[n.id];ganttDragState={mode:'row',nid:n.id,startX:pt.x,startY:pt.y,moved:false};});
     dhit.addEventListener('dblclick',ev=>{ev.stopPropagation();if(nodeClickTimer!==null){clearTimeout(nodeClickTimer);nodeClickTimer=null;}openGanttEditor(n.id);});
     dhit.addEventListener('contextmenu',ev=>{ev.stopPropagation();ev.preventDefault();S.sel=[n.id];delSel();});
     gg.appendChild(dhit);
@@ -7779,6 +7821,7 @@ function ganttNodeMD(ev,id){
   if(ev.button!==0)return;
   if(S.mode==='connect'){ ganttConnClick(id); return; }
   const n=S.nodes.find(x=>x.id===id); if(!n)return;
+  if(ganttPhasePressOnRow(ev,n)) return;   // v8.33追補: フェーズの配置待ちにバーを押した＝選択・移動にせず、離したときにこのタスクでフェーズを作る
   const pt=svgPt(ev);
   S.sel=[id];
   ganttDragState={mode:'move',nid:id,startX:pt.x,startY:pt.y,moved:false,
@@ -7790,6 +7833,7 @@ function ganttNodeMD(ev,id){
 function ganttStartDrag(ev,id,mode){
   if(ev.button!==0)return;
   const n=S.nodes.find(x=>x.id===id); if(!n)return;
+  if(ganttPhasePressOnRow(ev,n)) return;   // v8.33追補: バーの端のつまみもバーと同じ
   const pt=svgPt(ev);
   S.sel=[id];
   ganttDragState={mode,nid:id,startX:pt.x,startY:pt.y,moved:false,
@@ -8018,6 +8062,15 @@ function ganttSyncAllTaskColors(){
     else { delete n.color; delete n.stroke; }   // 無所属＝既定色に戻す
   });
 }
+// v8.33追補: 新しく作るフェーズの色＝フェーズの色の見本（ティール→紺→濃緑→濃紫→茶→濃赤）のうち、まだどのフェーズも使っていない最初の色。
+//   全部使っていればフェーズの数で順に回す。濃灰は色の決まっていないフェーズ（既定の #374151）と見分けがつかないので使わない。
+//   従来は新しいフェーズに色が無く（濃い灰色で描かれ）、中のタスクは既定の青のままで、フェーズとタスクの色がそろわなかった（ユーザー要望 2026-11-02・方針はユーザー決定）
+function ganttNextPhaseColor(){
+  const pal=GANTT_PHASE_COLORS.filter(c=>c.fill.toLowerCase()!=='#374151');
+  const used=new Set(S.nodes.filter(n=>n.type==='gantt_summary'&&n.color).map(n=>String(n.color).toLowerCase()));
+  const free=pal.find(c=>!used.has(c.fill.toLowerCase()));
+  return (free||pal[S.nodes.filter(n=>n.type==='gantt_summary').length%pal.length]).fill;
+}
 // ── ガント: タスク詳細編集モーダル ──
 let _ganttEditId=null, _ganttEditColor=null;
 // v6.06: 休工期間の入力行HTML（開始〜終了＋削除）。タスク編集ダイアログ内で動的に増減。
@@ -8106,6 +8159,7 @@ function openGanttEditor(id){
   cw.appendChild(custom);
   ganttModalSizeBox(isSum?0:ganttColList().length);
   document.getElementById('gantt-modal').style.display='flex';
+  ganttModalFitAreas();   // v8.33追補: 改行のある本文は欄を行数ぶんの高さに（表示してから測る）
   setTimeout(()=>document.getElementById('gm-name')?.focus(),50);
 }
 // v8.32: 編集画面の「＋ 列を追加」で足した列。「適用」（confirmGanttEdit）で S.gantt.cols に入れる。キャンセル・閉じるなら捨てる
@@ -8117,7 +8171,7 @@ function ganttModalRowIds(){ return ganttInfoRowIds().filter(r=>!_gmDelRows.incl
 // v8.33: 表の入力中の値を控える {列のid:{行のid:{l,v}}}（行・列を足したり消したりして表を描き直すときに入力を消さないため）
 function ganttModalDraft(f){
   const draft={};
-  f.querySelectorAll('input[data-col]').forEach(inp=>{
+  f.querySelectorAll('input[data-col],textarea[data-col]').forEach(inp=>{   // v8.33追補: 本文は textarea
     const dc=draft[inp.dataset.col]||(draft[inp.dataset.col]={});
     const dr=dc[inp.dataset.row]||(dc[inp.dataset.row]={});
     dr[inp.dataset.k]=inp.value;
@@ -8151,12 +8205,21 @@ function ganttModalColsHtml(n,draft){
       h+=`<div class="gm-cols-cell">`
         +`<input type="text" class="l" id="gm-col-${cid}-${row}-l" ${at} data-k="l" placeholder="項目名" value="${esc(get(c,row,'l'))}"/>`
         +`<span>：</span>`
-        +`<input type="text" id="gm-col-${cid}-${row}-v" ${at} data-k="v" placeholder="本文" value="${esc(get(c,row,'v'))}"/></div>`;
+        +`<textarea class="v" rows="1" id="gm-col-${cid}-${row}-v" ${at} data-k="v" placeholder="本文" title="Shift＋Enter または Alt＋Enter で改行" oninput="ganttModalFitArea(this)">${esc(get(c,row,'v'))}</textarea></div>`;   // v8.33追補: 本文は改行できる（Shift／Alt＋Enter）
     });
   });
   h+=`</div></div><button type="button" class="gm-rows-add" onclick="ganttModalAddRow()" title="下に行を足します（全部のタスクに増えます・「適用」で工程表へ反映）"><span>＋</span> 行を追加</button>`
     +`<div class="gm-cols-hint">「＋ 列を追加」で右に列${nc+1}、「＋ 行を追加」で下に行${rows.length+1}が増えます。「適用」を押したときに工程表へ反映します。</div></div>`;
   return h;
+}
+// v8.33追補: 情報欄の本文の欄（textarea）の高さを中身の行数に合わせる。表を描き直したとき・編集画面を開いたときにも呼ぶ
+function ganttModalFitArea(ta){ if(!ta) return; ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }
+function ganttModalFitAreas(){ document.querySelectorAll('#gm-cols-field textarea.v').forEach(ganttModalFitArea); }
+// v8.33追補: 本文の欄で Shift＋Enter／Alt＋Enter＝改行を入れる（Enter だけなら従来どおり「適用」）。Alt＋Enter は textarea でも改行が入らないので自分で入れる
+function ganttModalInsertBreak(ta){
+  const a=ta.selectionStart, b=ta.selectionEnd;
+  if(!document.execCommand||!document.execCommand('insertText',false,'\n')){ ta.setRangeText('\n',a,b,'end'); }   // execCommand＝Ctrl+Z で戻せる
+  ganttModalFitArea(ta);
 }
 // v8.33: 編集画面の「＋ 行を追加」＝入力中の値を控えて表を描き直し、下に行を 1 本足す（図に入れるのは「適用」のとき）
 function ganttModalAddRow(){
@@ -8164,7 +8227,7 @@ function ganttModalAddRow(){
   if(!n||!f) return;
   const draft=ganttModalDraft(f), row='ri'+(++S.uid);
   _gmPendingRows.push(row);
-  f.outerHTML=ganttModalColsHtml(n,draft);
+  f.outerHTML=ganttModalColsHtml(n,draft); ganttModalFitAreas();
   document.getElementById('gm-col-c0-'+row+'-l')?.focus();
 }
 // v8.33: 行の「×」＝その行を表から外す（足したばかりの行なら取り消すだけ。図の行なら「適用」で全タスクから消す）
@@ -11333,6 +11396,7 @@ function palClick(type){
   if(S.mode!=='select')setMode('select');   // v8.10: 接続・ハンドツール中にパレットを触ったら選択モードへ戻す
   const label=getDT().palLabels[type]||SD[type]?.text||type;
   if(type==='group_box') hint(`「${label}」: 何もない所で 2 つの角を順にクリック、またはドラッグで囲んで配置（何もない所で右クリック / Esc でキャンセル）`);   // v8.31追補⑱
+  else if(type==='gantt_summary'&&S.diagramType==='gantt') hint(`「${label}」: 入れたいタスクのバー・タスク名・行をクリックして配置（何もない所で右クリック / Esc でキャンセル）`);   // v8.33追補
   else hint(`「${label}」: キャンバスをクリックして配置（何もない所で右クリック / Esc でキャンセル）`);
 }
 
@@ -13303,7 +13367,9 @@ document.addEventListener('mouseup',ev=>{   // v8.15追補: 繋ぎ替え確定�
     const p=placePtAtClient(ev.clientX,ev.clientY);
     // v8.31追補⑱: ドラッグで囲んでいてキャンバスの外で離した＝置かない。押した位置は 1 点目として残す（2 回クリックの 2 点目待ちと同じ）
     if(!p){ if(st.drag&&groupDrawState) hint('キャンバスの外なので置いていません。対角をクリックして確定（右クリックで1点目を取消・Esc で中止）'); return; }   // v8.31追補㉗: 要約
-    if(st.type==='group_box') groupBoxClick(p.px,p.py); else placeShape(st.type,p.px,p.py);
+    if(st.type==='group_box') groupBoxClick(p.px,p.py);
+    else if(st.nid) ganttPlace(st.type,p.px,p.py,st.nid);   // v8.33追補: フェーズの配置待ちにバー・タスク名を押した
+    else placeShape(st.type,p.px,p.py);
     return;
   }
   if(gapState&&gapState.dragFrom!=null){ commitGapInsert(); return; }   // v8.25
@@ -14497,6 +14563,8 @@ document.addEventListener('keydown',ev=>{
   // ガント詳細モーダルが開いている間は Esc=閉じる / Enter=適用
   if(document.getElementById('gantt-modal').style.display==='flex'){
     if(ev.key==='Escape'){ev.preventDefault();closeGanttModal();}
+    else if(ev.key==='Enter'&&ev.isComposing) return;   // v8.33追補: 日本語の変換を確定する Enter では適用しない
+    else if(ev.key==='Enter'&&(ev.shiftKey||ev.altKey)&&ev.target.matches&&ev.target.matches('#gm-cols-field textarea.v')){ev.preventDefault();ganttModalInsertBreak(ev.target);}   // v8.33追補: 情報欄の本文は Shift／Alt＋Enter で改行
     else if(ev.key==='Enter'&&ev.target.type!=='range'){ev.preventDefault();confirmGanttEdit();}
     return;
   }
@@ -16245,6 +16313,9 @@ async function expExcel(){
     ws.getCell(base+1,3).value=isMile?ganttDispDate(n.date):(ganttDispDate(n.startDate)+'～'+ganttDispDate(n.endDate));
     if(!isMile){ labelCell(ws.getCell(base+1,4),'進捗率',bc); ws.getCell(base+1,5).value=Math.max(0,Math.min(100,n.progress||0))+'％'; }
     infoRowIds.forEach((row,ri)=>{                  // 行3〜 各情報列の 項目名｜本文
+      // v8.33追補: 本文に改行があれば、その行を改行の数ぶんの高さに（無ければ従来どおり高さを決めない）
+      const brk=Math.max(1,...cols.map(col=>String(ganttCellVal(n,col.id,row)||'').split('\n').length));
+      if(brk>1) ws.getRow(base+2+ri).height=15*brk;
       cols.forEach((col,ci)=>{
         labelCell(ws.getCell(base+2+ri,2+ci*2),ganttCellLabel(n,col.id,row),bc);
         const vc=ws.getCell(base+2+ri,3+ci*2); vc.value=ganttCellVal(n,col.id,row);
@@ -17196,11 +17267,12 @@ function generateFromMermaidGantt(text){
   let minStart=null; resolved.forEach(r=>{ if(r.start&&(!minStart||r.start<minStart))minStart=r.start; });
   S.gantt=defaultGantt(); if(minStart)S.gantt.startDate=minStart;
   const phaseByName={};
-  parsed.sections.forEach(s=>{ const pid=uid(); phaseByName[s.name]=pid; S.nodes.push({id:pid,type:'gantt_summary',text:s.name}); });
+  parsed.sections.forEach(s=>{ const pid=uid(); phaseByName[s.name]=pid; S.nodes.push({id:pid,type:'gantt_summary',text:s.name,color:ganttNextPhaseColor()}); });   // v8.33追補: 色を自動で
   resolved.forEach((r,i)=>{ const pid=r.section?phaseByName[r.section]:null;
     if(r.milestone) S.nodes.push({id:uid(),type:'gantt_milestone',text:r.name,date:r.start,row:i,phaseId:pid});
     else S.nodes.push({id:uid(),type:'gantt_task',text:r.name,startDate:r.start,endDate:r.end,row:i,progress:0,phaseId:pid}); });
   ganttPruneEmptyPhases();
+  ganttSyncAllTaskColors();   // v8.33追補: タスクをフェーズの色に
   lanePanel(); applyDiagramType();
   snap(); render();
   const lbl=document.getElementById('dtype-label'); if(lbl)lbl.textContent=getDT().name;
@@ -17490,7 +17562,7 @@ function generateFromGanttCsv(text){
   S.gantt=defaultGantt(); if(minStart)S.gantt.startDate=minStart;
   const phaseByName={};
   if(parsed.hasPhase){ const seen=new Set();
-    resolved.forEach(r=>{ const k=r.phase||''; if(k&&!seen.has(k)){ seen.add(k); const pid=uid(); phaseByName[k]=pid; S.nodes.push({id:pid,type:'gantt_summary',text:k}); } }); }
+    resolved.forEach(r=>{ const k=r.phase||''; if(k&&!seen.has(k)){ seen.add(k); const pid=uid(); phaseByName[k]=pid; S.nodes.push({id:pid,type:'gantt_summary',text:k,color:ganttNextPhaseColor()}); } }); }   // v8.33追補: 色を自動で
   resolved.forEach((r,i)=>{
     const pid=(r.phase&&phaseByName[r.phase])?phaseByName[r.phase]:null;
     if(r.milestone){ S.nodes.push({id:uid(),type:'gantt_milestone',text:r.name,date:r.start,row:i,phaseId:pid}); }
@@ -17498,6 +17570,7 @@ function generateFromGanttCsv(text){
       if(r.assignee) n.assignee=r.assignee; S.nodes.push(n); }
   });
   ganttPruneEmptyPhases();
+  ganttSyncAllTaskColors();   // v8.33追補: タスクをフェーズの色に
   lanePanel(); applyDiagramType();
   snap(); render();
   const lbl=document.getElementById('dtype-label'); if(lbl)lbl.textContent=getDT().name;
