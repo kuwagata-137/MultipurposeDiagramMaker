@@ -379,10 +379,9 @@ body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;displ
 #gantt-row-list{overflow-y:auto;padding:6px 8px;max-height:42vh;display:grid;grid-template-columns:minmax(0,1fr);row-gap:3px;column-gap:4px;align-content:start}
 #gantt-row-list.has-phase{grid-template-columns:20px minmax(0,1fr)}   /* v8.33追補: 左にフェーズのパネル */
 #gantt-row-list .lr{margin-bottom:0;min-width:0}
-.gph{position:relative;border-radius:4px;overflow:hidden;cursor:grab;user-select:none;min-height:0}
-/* 名前は絶対配置＝行の高さを押し広げない（タスクの行の高さにそろう）。入りきらない分は ganttPanel が切って「…」を付ける */
-.gph span{position:absolute;top:4px;bottom:4px;left:50%;transform:translateX(-50%);writing-mode:vertical-rl;text-align:center;font-size:11px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;pointer-events:none}
-.gph.sel{outline:2px solid #2563eb;outline-offset:1px}
+.gph{position:relative;cursor:grab;user-select:none;min-height:0}
+/* v8.33追補: 形は工程表の左のフェーズの縦帯と同じ（背の上下から右へ脚）。文字は出さない（ユーザー指示）。SVG は絶対配置＝行の高さを押し広げない */
+.gph svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;pointer-events:none}
 .gph.dragging{opacity:.45}
 .gph.drop-before{box-shadow:0 -2px 0 #2563eb}
 .gph.drop-after{box-shadow:0 2px 0 #2563eb}
@@ -14819,10 +14818,12 @@ function ganttPanel(){
     if(ph){
       const fill=ph.color||SD.gantt_summary.fill, name=ph.text||'(無題フェーズ)';
       const pn=document.createElement('div');
-      pn.className='gph'+(S.sel.includes(ph.id)?' sel':''); pn.dataset.unit=ui; pn.draggable=true;
-      pn.style.cssText=`grid-column:1;grid-row:${gr} / span ${u.nodes.length};background:${fill};color:${ganttTextOn(fill)}`;
+      const sel=S.sel.includes(ph.id);
+      pn.className='gph'; pn.dataset.unit=ui; pn.draggable=true;
+      pn.style.cssText=`grid-column:1;grid-row:${gr} / span ${u.nodes.length}`;
       pn.title=name+'（上下にドラッグで順序を入れ替え・中のタスクも一緒に動きます／ダブルクリックで編集）';
-      const sp=document.createElement('span'); sp.textContent=name; pn.appendChild(sp); pn.dataset.name=name;
+      // v8.33追補: 工程表の縦帯（renderGanttPhases）と同じ形・色・枠（選んでいると青い枠）。名前は書かない（ユーザー指示 2026-11-02）
+      Object.assign(pn.dataset,{rows:u.nodes.length,fill,stroke:sel?'#2563eb':(ph.stroke||SD.gantt_summary.stroke),sw:sel?2:1.4});
       pn.addEventListener('dragstart',ev=>{ ganttPhaseDragSrc=ph.id; pn.classList.add('dragging');
         list.querySelectorAll(`.lr[data-unit="${ui}"]`).forEach(x=>x.classList.add('dragging'));
         ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',ph.id); });
@@ -14865,10 +14866,17 @@ function ganttPanel(){
     list.appendChild(row);
     });
   });
-  // v8.33追補: 名前がパネルの高さに入りきらなければ、工程表と同じ ganttClip で切って最後を「…」に（縦書きはブラウザの text-overflow が
-  //   効かず、中央寄せのまま両端が切れて読めなかった）。一覧が隠れていて高さが測れないときは切らない（次に描くときに切る）
-  list.querySelectorAll('.gph').forEach(g=>{ const h=g.getBoundingClientRect().height-8, sp=g.firstChild, full=g.dataset.name||'';
-    if(h>0) sp.textContent=ganttClip(full,h,11); });
+  // v8.33追補: フェーズのパネルの形＝工程表の縦帯と同じ（左に背・上下の端が右へ脚）。背の幅は縦帯と同じ割合（脚の先まで幅の 54%）、
+  //   脚の伸びも縦帯と同じ式。高さはタスクの行の高さから求める（一覧が隠れていて測れなくても形が作れる）。SVG は枠いっぱいに伸び縮みする
+  const rowH=(list.querySelector('.lr')?.getBoundingClientRect().height)||24, W=20;
+  list.querySelectorAll('.gph').forEach(g=>{
+    const k=+g.dataset.rows||1, h=k*rowH+(k-1)*3, sw=+g.dataset.sw, top=sw/2, bot=h-sw/2;
+    const xs=sw/2, xL2=W-sw/2, xb=xs+(xL2-xs)*0.54, cap=Math.min(13,Math.max(6,(bot-top)*0.18));
+    const svg=e('svg',{viewBox:`0 0 ${W} ${h}`,preserveAspectRatio:'none'});   // 色はファイルの値なので文字列の HTML に入れず属性で入れる
+    svg.appendChild(e('path',{d:`M${xs},${top} L${xL2},${top} L${xb},${top+cap} L${xb},${bot-cap} L${xL2},${bot} L${xs},${bot} Z`,
+      fill:g.dataset.fill,stroke:g.dataset.stroke,'stroke-width':sw,'stroke-linejoin':'round','vector-effect':'non-scaling-stroke'}));
+    g.replaceChildren(svg);
+  });
 }
 
 // ── v8.09: 上書き保存（開いた／保存したファイルへそのまま書き戻す）──
