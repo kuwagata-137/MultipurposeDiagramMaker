@@ -3688,6 +3688,15 @@ function placeShape(type,px,py){
   }
 }
 // ── ガントチャート: タスク配置 ──
+// v8.33追補: 新しいタスクの終了日の既定＝開始日から 4 目盛りぶん。ただし開始日と同じ月の中に収める（月末で止める）。
+//   従来は 4 目盛りそのままで、週の目盛りなら 4 週後・月の目盛りなら 4 か月後になり、先の日程になりすぎた（ユーザー要望 2026-11-02）。
+//   時の目盛りは +4 時間のまま（月をまたぐのは月末の夜だけで、その日の 23 時で止める）
+function ganttNewTaskEnd(startDate,scale){
+  const s=ganttParseDate(startDate), e=ganttParseDate(ganttAddUnit(startDate,4,scale));
+  if(e.getFullYear()===s.getFullYear()&&e.getMonth()===s.getMonth()) return ganttFmt(e,scale);
+  const last=(scale==='hour')?new Date(s.getFullYear(),s.getMonth(),s.getDate(),23):new Date(s.getFullYear(),s.getMonth()+1,0);
+  return ganttFmt(last,scale);
+}
 function ganttMaxRow(){let m=-1;S.nodes.forEach(n=>{if(n.type==='gantt_task'||n.type==='gantt_milestone')m=Math.max(m,n.row||0);});return m;}
 // v8.33追補: パレットの「フェーズ」を選んで、配置を待っているか（ユーザー報告 2026-11-02「フェーズを左クリックだけで置けない」）
 function ganttPhaseArmed(){ return S.diagramType==='gantt'&&S.mode==='select'&&activePal==='gantt_summary'; }
@@ -3747,7 +3756,7 @@ function ganttPlace(type,px,py,targetId){
   } else {
     n.text=dt.shapeTexts?.[type]||SD[type].text;
     n.startDate=startDate;
-    n.endDate=ganttFmt(ganttAddUnit(startDate,4,g.scale),g.scale);   // v8.06: 時モードは+4時間・時刻付き
+    n.endDate=ganttNewTaskEnd(startDate,g.scale);   // v8.06: 時モードは+4時間・時刻付き／v8.33追補: 開始日の月の中に収める
     n.progress=0;
     // v8.32（計画外の修正）: 色の付いたフェーズに入れたら、そのフェーズの配下と同じ色にする。従来はフェーズ（phaseId）だけ入れて
     //   色を合わせておらず、新しいタスクだけ既定の青になっていた。同じフェーズに色の付いたタスクがあればその色をそのまま使う
