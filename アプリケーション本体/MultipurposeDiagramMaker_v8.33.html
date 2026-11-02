@@ -7487,7 +7487,9 @@ function renderGanttTaskBar(gg,n,sel){
     if(sg.hol) at['stroke-dasharray']='4 3';
     grp.appendChild(e('path',at));
   });
-  const label=(_bx1>ganttLeftW()+0.01)?(n.text||''):'';   // v8.33追補: 開始日より前で終わる＝バーが見えないので文字も出さない
+  // v8.33追補: 開始日より前で終わる・完了日（右端）より後から始まる＝バーが見えないので文字も出さない。
+  //   後者は従来、右端からはみ出す文字を右詰めにする処理（v5.00 ②）で、見えないバーの名前だけが右端に出ていた（ユーザー報告 2026-11-02）
+  const label=(_bx1>ganttLeftW()+0.01&&_bx0<ganttRightEdge()-0.01)?(n.text||''):'';
   const t=e('text',{fill:'#1e293b','pointer-events':'none'});
   // v8.08追補③: 折り返しONで段をまたぐバーは、ラベルも「その段に出ている部分」に合わせる。
   //   n.x/n.w は切る前の座標なので、そのまま使うと段の左外＝左情報欄の上に文字が乗る。
@@ -7543,7 +7545,9 @@ function renderGanttMilestone(gg,n,sel){
   const d=SD.gantt_milestone, cx=n.x+n.w/2, cy=n.y+n.h/2, r=n.h/2;
   const grp=e('g');
   grp.appendChild(e('polygon',{points:`${cx},${cy-r} ${cx+r},${cy} ${cx},${cy+r} ${cx-r},${cy}`,fill:n.color||d.fill,stroke:sel?'#2563eb':(n.stroke||d.stroke),'stroke-width':sel?2.5:1.2}));
-  if(n.text){
+  // v8.33追補: ひし形の中心が開始日より前・完了日（右端）より後なら、ひし形が見えないので名前も出さない
+  //   （従来は右端に寄せて名前だけが出た・開始日より前は名前の半分がタスク名の列の境目にのぞいた）
+  if(n.text&&cx>=ganttLeftW()&&cx<=ganttRightEdge()){
     // v4.30: マイルストーンの文字はシェイプの上に中央揃えで表示（旧: 右横・縦中央）
     const t=e('text',{x:cx,y:n.y-3,'text-anchor':'middle','dominant-baseline':'auto','font-size':'12',fill:'#1e293b','pointer-events':'none'});
     // v5.00 ②: 完了日で表示範囲を区切ったとき、右端(SVG_W)からはみ出すマイルストーン文字も右詰めに。
@@ -7587,7 +7591,7 @@ function renderGanttPhaseBars(){
     // フェーズ名（スパイン上に白で。バーが狭ければ右側に濃色で）
     // v8.33追補: 開始日（時間軸の左端）より前から始まるフェーズは、名前を開始日から書く（タスクのバーと同じ・ユーザー報告 2026-11-02）。
     //   lx＝見えている部分の左端・lw＝その幅。開始日より前で終わるフェーズは名前も出さない
-    const lx=Math.max(x,ganttLeftW()), lw=x+w-lx;
+    const lx=Math.max(x,ganttLeftW()), lw=Math.min(x+w,ganttRightEdge())-lx;   // v8.33追補: 完了日（右端）より後から始まるフェーズも名前を出さない
     const label=(lw>0.01)?(p.text||''):'';
     if(label){
       const ty=yTop+bodyH/2, fits=lw>label.length*12+12;
