@@ -20,7 +20,7 @@ const {
 } = requireDocx();
 
 const shotDir = path.join(__dirname, '..', '..', 'screenshots', 'manual');   // リポジトリのルートの screenshots/manual/
-const APP_VERSION = 'v8.33';
+const APP_VERSION = 'v8.34';
 const LAST_UPDATED = '2026年10月15日';
 const FONT = 'Meiryo UI';
 const manifest = JSON.parse(fs.readFileSync(path.join(shotDir, '_manifest.json'), 'utf8'));

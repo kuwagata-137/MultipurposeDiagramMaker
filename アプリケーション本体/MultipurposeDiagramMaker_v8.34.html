@@ -66,12 +66,19 @@ Python の例（ほかの言語でも同じ手順です）:
   color    塗りの色（"#rrggbb"）。stroke は枠の色。省くと種類ごとの既定の色
   dashed   true で枠を点線にする（「省略できる工程」などに使う）
   fontSize 文字の大きさ（px・既定 12）
+  textColor 文字の色（"#rrggbb"）。省くと既定の色。gantt・mindmap のシェイプでは効かない
+  sw       枠の太さ（px・既定 1.5）。fillNone・strokeNone は true で塗りなし・枠なし
+  fillT strokeT 塗り・枠の透過性（1〜100。100 で見えなくなる）
+  grad     グラデーション。{"dir":"r","color":"#ffffff"} と書くと、grad の color の色から、シェイプの塗りの色へ変わる。
+           dir は r 右へ・b 下へ・d 右下へ・l 左へ・t 上へ・u 左上へ
+           （textColor から grad までは gantt・mindmap のシェイプでは効かない。色はどれも "#rrggbb" の 7 文字で書く）
 
 線（edges の要素）の共通の項目
 
   from to  必須。つなぐシェイプの id（矢印は to の側に付く）
   label    線に付ける文字（例 "はい"）
   dashed   true で点線にする
+  color    線の色（"#rrggbb"）。sw は線の太さ（px・既定 1.5）
   id       省いてよい（アプリが振る）
   曲がり方（経路）は書きません。アプリが自動で引きます。
 
@@ -247,7 +254,7 @@ Python の例（ほかの言語でも同じ手順です）:
 
 ===== AI作図の手引き ここまで ===== -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MultipurposeDiagramMaker v8.33</title>
+<title>MultipurposeDiagramMaker v8.34</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;display:flex;flex-direction:column;height:100vh;overflow:hidden;user-select:none}
@@ -527,6 +534,83 @@ body{font-family:'Segoe UI','Helvetica Neue',sans-serif;background:#e2e8f0;displ
 #gstick-headbtn>button{position:absolute;white-space:nowrap;background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;box-shadow:0 1px 4px rgba(15,23,42,.12)}
 #btn-gh-hide:hover,#btn-gh-show:hover{background:#e2e8f0;color:#0f172a}
 #gstick-headbtn{left:0;z-index:8}
+/* v8.34: 色のボタン（Office と同じ分割ボタン）・色の一覧・「色の設定」の画面 */
+.osplit{display:inline-flex;align-items:stretch;border:1px solid transparent;border-radius:4px;height:28px;margin-right:2px;color:#1e293b}
+.osplit:hover,.osplit.open{border-color:#c7c7c7;background:#fff}
+.osplit .om{display:flex;flex-direction:column;align-items:center;justify-content:center;width:28px;cursor:pointer;gap:1px;border-radius:3px 0 0 3px}
+.osplit .om:hover,.osplit .od:hover,.osplit.open .od{background:#e2e8f0}
+.osplit .ob{width:18px;height:4px;border:.5px solid rgba(0,0,0,.25);box-sizing:border-box}
+.osplit .od{display:flex;align-items:center;justify-content:center;width:14px;font-size:9px;color:#444;cursor:pointer;border-left:1px solid transparent;border-radius:0 3px 3px 0}
+.osplit:hover .od,.osplit.open .od{border-left-color:#c7c7c7}
+.osplit.ostyle{height:26px;margin-right:8px;border-color:#cbd5e1;background:#fff}
+.osplit.ostyle .om{flex-direction:row;width:auto;gap:5px;padding:0 6px;font-size:12px}
+.osplit .os{width:26px;height:16px;border-radius:3px;border:1.5px solid #3b82f6;font-size:9px;line-height:13px;text-align:center;box-sizing:border-box}
+#lane-choice.ocp{padding:0 0 3px;gap:0;border-radius:0;border:1px solid #c8c6c4;box-shadow:0 3px 10px rgba(0,0,0,.25);width:214px;min-width:0;font-size:12px;color:#222;user-select:none;display:block}
+.ocp .oc-title{font-weight:700;padding:6px 8px 4px}
+.ocp .oc-hd,.oc-sub .oc-hd{background:#f0f0f0;font-weight:700;padding:4px 8px;margin:0 0 5px;border-top:1px solid #e1e1e1;border-bottom:1px solid #e1e1e1}
+.ocp>.oc-hd:first-child{border-top:0}
+.oc-grid{display:grid;grid-template-columns:repeat(10,16px);column-gap:4px;padding:0 9px}
+.oc-grid.top{margin-bottom:5px}
+.oc-sw{width:16px;height:16px;box-sizing:border-box;border:1px solid rgba(0,0,0,.18);cursor:pointer;position:relative}
+.oc-sw:hover{outline:1.5px solid #f29436;border-color:#ffe294;z-index:2}
+.oc-sw.sel{outline:2px solid #f29436;border-color:#fff;z-index:1}
+.oc-gap{height:7px}
+.oc-line{height:1px;background:#e1e1e1;margin-bottom:3px}
+.oc-item{display:flex;align-items:center;gap:8px;padding:5px 8px;cursor:pointer;white-space:nowrap;position:relative}
+.oc-item:hover{background:#e5e5e5}
+.oc-item .ic{width:18px;height:16px;display:flex;align-items:center;justify-content:center;flex:0 0 18px}
+.oc-item .arr{margin-left:auto;font-size:9px;color:#444}
+.oc-sub{display:none;position:absolute;left:100%;top:-4px;background:#fff;border:1px solid #c8c6c4;box-shadow:0 3px 10px rgba(0,0,0,.25);padding:3px 0;width:178px;z-index:3;cursor:default;white-space:normal}
+.oc-wrow{display:flex;align-items:center;gap:10px;padding:5px 12px;cursor:pointer}
+.oc-wrow:hover{background:#e5e5e5}
+.oc-wrow.sel{background:#dbeafe}
+.oc-wrow span{width:48px;flex:0 0 48px}
+.oc-wrow i{flex:1;background:#222;display:block}
+.oc-grads{display:grid;grid-template-columns:repeat(3,40px);gap:8px;padding:0 14px 6px}
+.oc-gradc{width:38px;height:30px;border:1px solid #999;cursor:pointer}
+.oc-gradc:hover{outline:2px solid #f29436}
+.oc-styles{display:grid;grid-template-columns:repeat(7,34px);gap:7px;padding:2px 10px 8px}
+.oc-style{width:34px;height:24px;border-radius:4px;box-sizing:border-box;border:1.5px solid #999;font-size:10px;line-height:21px;text-align:center;cursor:pointer}
+.oc-styles.sm{grid-template-columns:repeat(7,24px);gap:5px;padding:2px 8px 8px}
+.oc-styles.sm .oc-style{width:24px;height:20px;font-size:9px;line-height:17px}
+.oc-style:hover,.oc-style.sel{outline:2px solid #f29436;outline-offset:2px}
+.oc-cbtn{display:inline-flex;align-items:stretch;height:28px;padding:0;border:1px solid #cbd5e1;border-radius:4px;background:#fff;cursor:pointer}
+.oc-cbtn:hover{border-color:#3b82f6}
+.oc-cbtn .sw{width:42px;margin:5px 6px;border:1.5px solid #999;border-radius:2px;display:block}
+.oc-cbtn .dd{display:flex;align-items:center;padding:0 4px;font-size:9px;color:#444;border-left:1px solid #cbd5e1}
+#oc-dlg{position:fixed;inset:0;z-index:3000;font-size:12px;color:#222}
+#oc-dlg .ocd-bg{position:absolute;inset:0;background:rgba(0,0,0,.12)}
+#oc-dlg .ocd-box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:440px;background:#fff;border:1px solid #6b6b6b;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.ocd-tt{display:flex;align-items:center;justify-content:space-between;padding:8px 12px}
+.ocd-tt b{font-weight:400}
+.ocd-x{border:0;background:none;font-size:13px;cursor:pointer;color:#444;padding:2px 6px}
+.ocd-x:hover{background:#e81123;color:#fff}
+.ocd-bd{display:flex;gap:14px;padding:4px 14px 14px}
+.ocd-left{flex:1}
+.ocd-tabs{display:flex;border-bottom:1px solid #adadad}
+.ocd-tabs div{padding:4px 12px;border:1px solid transparent;border-bottom:0;margin-bottom:-1px;cursor:pointer}
+.ocd-tabs div.on{border-color:#adadad;background:#fff}
+.ocd-pane{border:1px solid #adadad;border-top:0;padding:10px 12px;height:330px;box-sizing:border-box}
+.ocd-hex{display:block;margin:14px auto 0}
+.ocd-hex .hx{cursor:pointer}
+.ocd-right{width:92px;display:flex;flex-direction:column;gap:7px;padding-top:27px}
+.ocd-btn{border:1px solid #adadad;background:#e1e1e1;padding:4px 0;text-align:center;border-radius:2px;cursor:pointer;font-size:12px}
+.ocd-btn:hover{background:#e5f1fb;border-color:#0078d4}
+.ocd-btn.def{border-color:#0078d4;box-shadow:inset 0 0 0 1px #0078d4}
+.ocd-newcur{margin-top:auto;text-align:center}
+.ocd-newcur .bx{width:60px;margin:3px auto;border:1px solid #6b6b6b;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/10px 10px}
+.ocd-newcur .bx div{height:26px}
+.ocd-cf{display:flex;gap:10px;margin-top:4px}
+.ocd-field{position:relative;width:226px;height:150px;border:1px solid #6b6b6b;cursor:crosshair;background:linear-gradient(to bottom,rgba(128,128,128,0),#808080),linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+.ocd-field i{position:absolute;width:11px;height:11px;margin:-6px 0 0 -6px;border:2px solid #000;border-radius:50%;box-shadow:0 0 0 1px #fff inset;pointer-events:none}
+.ocd-lum{position:relative;width:14px;height:150px;border:1px solid #6b6b6b;cursor:ns-resize}
+.ocd-lum i{position:absolute;left:17px;margin-top:-8px;font-size:11px;font-style:normal;pointer-events:none}
+.ocd-f{display:flex;align-items:center;gap:6px;margin-top:6px}
+.ocd-f label{width:112px;white-space:nowrap}
+.ocd-f input,.ocd-f select{border:1px solid #7a7a7a;padding:2px 5px;width:74px;font-size:12px;box-sizing:border-box;height:22px}
+.ocd-alpha{display:flex;align-items:center;gap:10px;padding:0 14px 14px}
+.ocd-alpha .ocd-ar{width:190px}
+.ocd-alpha .ocd-an{width:56px;border:1px solid #7a7a7a;padding:2px 5px;font-size:12px;height:22px;box-sizing:border-box}
 #lane-choice{position:fixed;z-index:1000;background:white;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.18);padding:10px 12px;display:flex;flex-direction:column;gap:5px;min-width:120px}
 #lane-choice .lc-title{font-size:11px;font-weight:600;color:#64748b;margin-bottom:2px}
 #lane-choice button{padding:5px 10px;border-radius:4px;border:1.5px solid #e2e8f0;cursor:pointer;font-size:12px;color:#1e293b;text-align:left;transition:all .1s}
@@ -808,7 +892,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 //# sourceMappingURL=exceljs.bare.min.js.map</script>
 
 <div id="app-title-bar">
-  <span id="app-title-text">MultipurposeDiagramMaker v8.33</span>
+  <span id="app-title-text">MultipurposeDiagramMaker v8.34</span>
   <span class="diagram-type-label" id="dtype-label" onclick="toggleDTypeMenu(event)"></span>
   <!-- v8.12: 図の名称。図種バッジのすぐ右へ移設（旧＝左サイドバー最上段でラベルも無く埋もれていた） -->
   <input id="diagram-name" type="text" placeholder="図の名称を入力" aria-label="図の名称" oninput="onDiagramNameInput(this.value)"/>
@@ -863,7 +947,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="rgroup"><div class="gbody">
     <div class="rowset">
       <div class="rrow">
-        <button class="tbtn" onclick="showShapeColorMenu(event)" title="選択シェイプの色を変更">🎨 色</button>
+        <!-- v8.34: 色のボタンを Office と同じ 3 つに（左側＝直前の色をそのまま塗る・▾＝色の一覧）。下段に「一括」 -->
+        <span id="oc-tools" style="display:inline-flex;align-items:center;margin-right:4px">
+          <span class="osplit" title="図形の塗りつぶし"><span class="om" onmousedown="event.preventDefault()" onclick="ocSetFill(ocLast.fill)"><svg width="18" height="15" viewBox="0 0 18 15"><path d="M7.2 1.2 2 6.4a1 1 0 0 0 0 1.4l4 4a1 1 0 0 0 1.4 0l5.2-5.2z" fill="#fff" stroke="#3b3b3b" stroke-width="1.1" stroke-linejoin="round"/><path d="M5.6 2.8 4.2 1.4" stroke="#3b3b3b" stroke-width="1.1" stroke-linecap="round"/><path d="M14.6 8.2c.9 1.3 1.5 2.2 1.5 3a1.5 1.5 0 0 1-3 0c0-.8.6-1.7 1.5-3z" fill="#3b3b3b"/></svg><span class="ob" id="oc-bar-fill"></span></span><span class="od" onmousedown="event.preventDefault()" onclick="ocFillMenu(event)" aria-label="図形の塗りつぶしの色の一覧">▾</span></span>
+          <span class="osplit" title="図形の枠線（接続線の色もここで変えます）"><span class="om" onmousedown="event.preventDefault()" onclick="ocSetLine(ocLast.line)"><svg width="18" height="15" viewBox="0 0 18 15"><path d="M3 12l.8-3.2L11.4 1.2a1.2 1.2 0 0 1 1.7 0l.9.9a1.2 1.2 0 0 1 0 1.7L6.4 11.4z" fill="#fff" stroke="#3b3b3b" stroke-width="1.1" stroke-linejoin="round"/><path d="M10.2 2.6l2.6 2.6" stroke="#3b3b3b" stroke-width="1.1"/></svg><span class="ob" id="oc-bar-line"></span></span><span class="od" onmousedown="event.preventDefault()" onclick="ocLineMenu(event)" aria-label="図形の枠線の色の一覧">▾</span></span>
+          <span class="osplit" title="フォントの色"><span class="om" onmousedown="event.preventDefault()" onclick="ocSetFont(ocLast.font)"><svg width="18" height="15" viewBox="0 0 18 15"><text x="9" y="13" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" fill="#3b3b3b">A</text></svg><span class="ob" id="oc-bar-font"></span></span><span class="od" onmousedown="event.preventDefault()" onclick="ocFontMenu(event)" aria-label="フォントの色の一覧">▾</span></span>
+        </span>
         <!-- v8.14: 文字サイズ。Word/Excel と同じ〈数値欄＋▼一覧〉＋〈拡大／縮小〉の並び。
              数値欄は直接入力もでき、▼で一覧から選ぶ。拡大・縮小は Word と同じ段（8→9→10→11→12→14→16…）を1段ずつ動く。 -->
         <span id="fontsize-tools" style="display:inline-flex;align-items:center;gap:4px">
@@ -882,6 +971,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <!-- v8.10: 文字揃えは Word/Excel と同じ「横線の束の端が揃う」絵柄へ（旧 ⯇ ≡ ⯈ は何のボタンか分からなかった）。
            線の色は currentColor＝ボタンの文字色に追従するので、ホバー・選択中の色変化は他のボタンと同じ。 -->
       <div class="rrow">
+        <span class="osplit ostyle" title="塗り・枠線・文字の色をまとめて設定"><span class="om" onmousedown="event.preventDefault()" onclick="ocSetStyle(ocLast.style)"><span class="os" id="oc-style-sample">Abc</span>一括</span><span class="od" onmousedown="event.preventDefault()" onclick="ocStyleMenu(event)" aria-label="まとめて設定する色の一覧">▾</span></span>
         <button class="tbtn" onmousedown="event.preventDefault()" onclick="setTextAlign('left')" title="テキストを左揃え"><svg width="15" height="15" viewBox="0 0 16 16"><g class="algn"><line x1="2" y1="3" x2="14" y2="3"/><line x1="2" y1="6.33" x2="9.5" y2="6.33"/><line x1="2" y1="9.67" x2="14" y2="9.67"/><line x1="2" y1="13" x2="9.5" y2="13"/></g></svg></button>
         <button class="tbtn" onmousedown="event.preventDefault()" onclick="setTextAlign('center')" title="テキストを中央揃え"><svg width="15" height="15" viewBox="0 0 16 16"><g class="algn"><line x1="2" y1="3" x2="14" y2="3"/><line x1="4.25" y1="6.33" x2="11.75" y2="6.33"/><line x1="2" y1="9.67" x2="14" y2="9.67"/><line x1="4.25" y1="13" x2="11.75" y2="13"/></g></svg></button>
         <button class="tbtn" onmousedown="event.preventDefault()" onclick="setTextAlign('right')" title="テキストを右揃え"><svg width="15" height="15" viewBox="0 0 16 16"><g class="algn"><line x1="2" y1="3" x2="14" y2="3"/><line x1="6.5" y1="6.33" x2="14" y2="6.33"/><line x1="2" y1="9.67" x2="14" y2="9.67"/><line x1="6.5" y1="13" x2="14" y2="13"/></g></svg></button>
@@ -1677,7 +1767,7 @@ const LC=[
 const VIRTUAL_LANE={id:'__virtual__',name:'',bg:'#f8fafc',hd:'#e2e8f0',w:800};
 // v8.14: このアプリの版番号。保存データに入れておき、読み込んだファイルが古い版で
 //   作られたものかを判断する（古ければ接続線の経路を今の仕組みで引き直す）。
-const APP_VER='8.33';
+const APP_VER='8.34';
 
 // v8.18: 点線スタイル。省略可能な工程（条件により実施しない処理）を点線の枠・線で表す業務フロー記法のため、
 //   ノード n.dashed / エッジ ed.dashed（true のみ保持・実線はキー削除＝fontSize と同じ流儀）。
@@ -8241,30 +8331,18 @@ function openGanttEditor(id){
   // 色プリセット
   html+=`<div class="gm-field"><label>色</label><div class="gm-colors" id="gm-colors"></div></div>`;
   box.innerHTML=html;
-  // スウォッチ生成（フェーズは濃色パレット・他は GANTT_COLORS）＋カスタム色ピッカー（v4.30）
+  // v8.34: 色は見本のボタン→Office と同じ色の一覧（これまでの色＋テーマの色・標準の色・その他の色）。枠の色は塗りから自動
   const cw=box.querySelector('#gm-colors');
-  const palette=isSum?GANTT_PHASE_COLORS:GANTT_COLORS;
-  palette.forEach(c=>{
-    const stroke=c.stroke||ganttStrokeFor(c.fill);
-    const sw=document.createElement('div');
-    sw.className='gm-swatch'+((_ganttEditColor&&_ganttEditColor.fill===c.fill)?' on':'');
-    sw.style.background=c.fill; sw.style.boxShadow='inset 0 0 0 2px '+stroke;
-    sw.title=c.name;
-    sw.addEventListener('click',()=>{
-      _ganttEditColor={fill:c.fill,stroke};
-      cw.querySelectorAll('.gm-swatch').forEach(s=>s.classList.remove('on'));
-      sw.classList.add('on');
-    });
-    cw.appendChild(sw);
-  });
-  const custom=document.createElement('input'); custom.type='color'; custom.title='カスタム色';
-  custom.style.cssText='width:30px;height:26px;padding:0;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff;vertical-align:middle';
-  custom.value=(_ganttEditColor&&/^#[0-9a-fA-F]{6}$/.test(_ganttEditColor.fill))?_ganttEditColor.fill:(isSum?'#0e7490':'#3b82f6');
-  custom.addEventListener('input',()=>{
-    _ganttEditColor={fill:custom.value,stroke:ganttStrokeFor(custom.value)};
-    cw.querySelectorAll('.gm-swatch').forEach(s=>s.classList.remove('on'));
-  });
-  cw.appendChild(custom);
+  const palette=isSum?GANTT_PHASE_COLORS:GANTT_COLORS, defFill=SD[n.type].fill;
+  const cbtn=document.createElement('button'); cbtn.type='button'; cbtn.className='oc-cbtn'; cbtn.title='色を選ぶ';
+  cbtn.innerHTML='<span class="sw"></span><span class="dd">▾</span>';
+  const paintBtn=()=>{ const s=cbtn.firstChild; s.style.background=_ganttEditColor?_ganttEditColor.fill:defFill; s.style.borderColor=_ganttEditColor?(_ganttEditColor.stroke||ganttStrokeFor(_ganttEditColor.fill)):SD[n.type].stroke; };
+  const setC=(fill,stroke)=>{ _ganttEditColor=fill?{fill,stroke}:null; paintBtn(); };
+  cbtn.addEventListener('click',ev=>{ ev.stopPropagation(); ocOpen(cbtn,{z:2100,cur:_ganttEditColor&&_ganttEditColor.fill,presets:palette,presetTitle:'これまでの色',presetCols:7,
+    curPreset:p=>!!_ganttEditColor&&_ganttEditColor.fill===p.fill,onPreset:p=>setC(p.fill,p.stroke),onPick:c=>setC(c,ganttStrokeFor(c)),
+    items:[{icon:OC_ICON.none,label:'標準の色に戻す',key:'N',on:()=>setC(null)},
+           {icon:OC_ICON.more,label:'その他の色',key:'M',dots:true,on:()=>ocDialog({cur:(_ganttEditColor&&_ganttEditColor.fill)||defFill,onOK:c=>setC(c,ganttStrokeFor(c))})}]}); });
+  cw.appendChild(cbtn); paintBtn();
   ganttModalSizeBox(isSum?0:ganttColList().length);
   document.getElementById('gantt-modal').style.display='flex';
   ganttModalFitAreas();   // v8.33追補: 改行のある本文は欄を行数ぶんの高さに（表示してから測る）
@@ -9517,6 +9595,7 @@ function render(){
   ['g-gantt-left','g-gantt-top','g-gantt-corner','g-group-bands','g-pagebreak','g-gap','g-lane-hdr'].forEach(id=>{const el=document.getElementById(id); if(el) el.innerHTML='';});   // v8.22: g-pagebreak も図種をまたぐと改ページ線が残るため   // v8.19: g-group-bands も図種をまたぐと透明帯が残りクリックを奪うため必ず空へ（renderNodes が描き直す）
   layoutGanttHeadButtons();   // v8.11: ガント以外なら見出しの開閉ボタンを引っ込める
   syncFontSizeUI();           // v8.14: 文字サイズの数値欄を選択状態に追従させる
+  ocSyncUI();                 // v8.34: 色のボタンの色の線
   syncDashUI();               // v8.18: 点線ボタンの活性表示を選択状態に追従させる
   if(S.diagramType!=='gantt') syncPrintPaperUI();   // v8.22: 用紙・向きの選択欄と改ページ位置ボタンを状態に追従させる
   // ガントチャート・マインドマップは専用描画パス
@@ -9970,7 +10049,7 @@ function renderEdges(){
   // エッジ描画ヘルパー
   function renderOneEdge(dat){
     const{ed,sx,sy,ex,ey,pd,exitSide,entrySide}=dat;
-    const isSel=S.sel.includes(ed.id),col=isSel?'#2563eb':'#475569',mk=isSel?'url(#arrB)':'url(#arr)';
+    const isSel=S.sel.includes(ed.id),_ec=ocEdgeColor(ed,isSel),col=isSel?'#2563eb':(_ec||'#475569'),mk=isSel?'url(#arrB)':(_ec?ocArrow(_ec):'url(#arr)');   // v8.34: 接続線の色
     if(isSel){   // 再接続ハンドル用に描画端点を格納（手動経路はポリライン端、自動は連結点）
       const _fp=(dat.manual&&dat.drawPts)?dat.drawPts[0]:[sx,sy];
       const _tp=(dat.manual&&dat.drawPts)?dat.drawPts[dat.drawPts.length-1]:[ex,ey];
@@ -9997,7 +10076,7 @@ function renderEdges(){
     // v8.28: 本体の線は当たり判定を持たない（透明の hit 12px に任せる）。従来は hit の上に描かれる 1.5px の本体線を
     //   正確にクリックしたとき、ハンドラの無い本体線が mousedown を受けて svgMD（選択解除＋再描画）へ落ち、要素が
     //   作り直されて click が成立せず線を選べなかった（実DOM検証で発見・選択モードでも同じ）
-    const edgeAttrs={d:pd,stroke:col,'stroke-width':isSel?2:1.5,fill:'none','pointer-events':'none'};
+    const edgeAttrs={d:pd,stroke:col,'stroke-width':ocEdgeW(ed,isSel),fill:'none','pointer-events':'none'};   // v8.34: 太さ
     if(S.diagramType==='uml'){
       const um=umlEdgeStyle(ed.umlType,isSel);
       if(um.dash) edgeAttrs['stroke-dasharray']=um.dash;
@@ -10237,7 +10316,7 @@ function renderEdges(){
     const isSel=S.sel.includes(dat.ed.id);
     bridgeArcPaths(dat.crossings).forEach(d=>{
       g.appendChild(e('path',{d,stroke:'#ffffff','stroke-width':5,fill:'none','pointer-events':'none'}));
-      const a={d,stroke:isSel?'#2563eb':'#475569','stroke-width':isSel?2:1.5,fill:'none','pointer-events':'none'};
+      const a={d,stroke:isSel?'#2563eb':(ocEdgeColor(dat.ed,false)||'#475569'),'stroke-width':ocEdgeW(dat.ed,isSel),fill:'none','pointer-events':'none'};
       if(S.diagramType==='uml'){ const um=umlEdgeStyle(dat.ed.umlType,isSel); if(um.dash) a['stroke-dasharray']=um.dash; }
       if(dat.ed.dashed&&!a['stroke-dasharray']) a['stroke-dasharray']=EDGE_DASH;   // v8.18: 点線エッジは山（ブリッジ）も点線で描き直す
       g.appendChild(e('path',a));
@@ -10889,6 +10968,7 @@ function renderNodes(){
     const sel=S.sel.includes(n.id);
     const ng=e('g',{'data-nid':n.id});
     const _shp=shapeEl(n,sel);
+    ocPaintShape(n,ng,_shp,sel);   // v8.34: 塗りなし・透過性・グラデーション・枠線なし・太さ
     // v8.18: 点線ノード。戻り値ルートへの1回で内部の仕切り線・二重線まで継承で点線化される
     //   （crosslane の内部仕切りだけは既存の '3,2' 明示が優先＝元々点線なので害なし）
     if(n.dashed&&_shp) _shp.setAttribute('stroke-dasharray',(n.type==='group_box'||n.type==='org_group')?GROUP_DASH:NODE_DASH);   // v8.21: グループ枠は長破線
@@ -11233,6 +11313,7 @@ function renderNodes(){
       editText(n.id);
     });
     ng.addEventListener('contextmenu',ev=>{ev.stopPropagation();ev.preventDefault();S.sel=[n.id];delSel()});
+    ocPaintText(n,ng);   // v8.34: フォントの色
     g.appendChild(ng);
   });
   renderFlowControls();   // v8.01: ステップ列の末尾に＋/－ボタン
@@ -12353,96 +12434,287 @@ function pasteShiftRoute(c,dx,dy,fromN,toN){
   const hz=side?(side==='left'||side==='right'):(Math.abs(b[0]-a[0])>Math.abs(b[1]-a[1]));
   c.midPos+=hz?dx:dy;
 }
-// v8.33: 色見本の行（26×26 の見本＝塗り＋内側に枠の色）＋カスタム色。押すと apply(塗り,枠)。
-//   ツールバーの「色」（showShapeColorMenu）と見出しの編集の凡例項目の色（ganttLegendColorMenu）が同じものを使う
-//   ＝色の選び方をそろえる（ユーザー要望 2026-10-23）。カスタム色の枠は塗りから自動（ganttStrokeFor）
-function colorSwatchRow(palette,cur,defCustom,apply){
-  const row=document.createElement('div');
-  row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;max-width:200px;align-items:center';
-  palette.forEach(c=>{
-    const stroke=c.stroke||ganttStrokeFor(c.fill);
-    const sw=document.createElement('div');
-    sw.style.cssText=`width:26px;height:26px;border-radius:6px;cursor:pointer;background:${c.fill};box-shadow:inset 0 0 0 2px ${stroke};`;
-    sw.title=c.name;
-    sw.addEventListener('click',ev2=>{ev2.stopPropagation();apply(c.fill,stroke);});
-    row.appendChild(sw);
-  });
-  const custom=document.createElement('input'); custom.type='color'; custom.title='カスタム色';
-  custom.style.cssText='width:30px;height:26px;padding:0;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff';
-  custom.value=(cur&&/^#[0-9a-fA-F]{6}$/.test(cur))?cur:defCustom;
-  custom.addEventListener('click',ev2=>ev2.stopPropagation());
-  custom.addEventListener('change',ev2=>{ev2.stopPropagation();apply(custom.value,ganttStrokeFor(custom.value));});
-  row.appendChild(custom);
-  return row;
-}
-// ── シェイプの色変更メニュー ──
-function showShapeColorMenu(ev){
-  const ids=S.sel.filter(id=>S.nodes.some(n=>n.id===id));
-  if(!ids.length){hint('色を変更するシェイプを選択してください');return;}
-  if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;}
-  document.getElementById('lane-choice')?.remove();
-  const dlg=document.createElement('div'); dlg.id='lane-choice';
-  const btn=ev&&ev.currentTarget?ev.currentTarget.getBoundingClientRect():{left:200,bottom:60};
-  dlg.style.left=Math.max(4,btn.left)+'px'; dlg.style.top=(btn.bottom+6)+'px';
-  const title=document.createElement('div'); title.className='lc-title';
-  title.textContent='シェイプの色:'; dlg.appendChild(title);
-  const closeDlg=()=>{dlg.remove();if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;}};
-  const apply=(fill,stroke)=>{
-    ids.forEach(id=>{const n=S.nodes.find(x=>x.id===id);if(!n)return;
-      if(fill){n.color=fill;n.stroke=stroke;} else {delete n.color;delete n.stroke;}
-      if(n.type==='gantt_summary') ganttSyncPhaseTaskColors(n);});   // v4.30: フェーズ色→配下タスクへ追従
-    closeDlg(); snap(); render();
-  };
-  // スウォッチ行（フェーズのみ＝濃色パレット／他＝GANTT_COLORS）＋カスタム色ピッカー（v4.30）
-  const isPhaseSel = ids.length>0 && ids.every(id=>S.nodes.find(n=>n.id===id)?.type==='gantt_summary');
-  const first=S.nodes.find(n=>n.id===ids[0]);
-  dlg.appendChild(colorSwatchRow(isPhaseSel?GANTT_PHASE_COLORS:GANTT_COLORS, first&&first.color, isPhaseSel?'#0e7490':'#3b82f6', apply));
-  const reset=document.createElement('button'); reset.className='lc-cancel';
-  reset.textContent='標準の色に戻す';
-  reset.addEventListener('click',ev2=>{ev2.stopPropagation();apply(null,null);});
-  dlg.appendChild(reset);
+// ══ v8.34: 色の設定を Microsoft Office と同じ操作に（ユーザー要望 2026-11-10・仕様はモック 10 枚と AskUserQuestion で決定） ══
+//   ツールバーの「色」1 つ（6 色・塗りと枠を 1 組）→「図形の塗りつぶし」「図形の枠線」「フォントの色」＋下段の「一括」。
+//   一覧＝テーマの色（10 列×6 段）・標準の色・最近使用した色・なし・その他の色（「色の設定」＝標準／ユーザー設定・透過性）。
+//   図のデータ（どれも指定したときだけ持つ＝以前の図・以前の版はそのまま）:
+//     シェイプ n.color（塗り）／n.stroke（枠線）は従来どおり。n.textColor（文字）・n.fillNone／n.strokeNone（なし）・
+//     n.fillT／n.strokeT（透過性 1〜100）・n.sw（枠線の太さ px）・n.grad={dir,color}（グラデーション＝color から塗りの色へ）
+//     接続線 ed.color・ed.sw（点線は従来の dashed）
+//   ガント・マインドマップのシェイプは「1 色選ぶと塗りと枠の組を自動で作る」従来の動きのまま（ユーザー決定）
+const OC_HEX=/^#[0-9a-fA-F]{6}$/;
+function ocHex(v){ return (typeof v==='string'&&OC_HEX.test(v))?v:null; }
+function ocPct(v){ const x=Math.round(Number(v)); return (Number.isFinite(x)&&x>0)?Math.min(100,x):0; }
+const OC_THEME=[
+  ['#FFFFFF','白、背景 1',[['d',.05],['d',.15],['d',.25],['d',.35],['d',.5]]],
+  ['#000000','黒、テキスト 1',[['l',.5],['l',.35],['l',.25],['l',.15],['l',.05]]],
+  ['#E7E6E6','灰色、背景 2',[['d',.1],['d',.25],['d',.5],['d',.75],['d',.9]]],
+  ['#44546A','青灰色、テキスト 2',[['l',.8],['l',.6],['l',.4],['d',.25],['d',.5]]],
+  ['#4472C4','青、アクセント 1'],['#ED7D31','オレンジ、アクセント 2'],['#A5A5A5','灰色、アクセント 3'],
+  ['#FFC000','ゴールド、アクセント 4'],['#5B9BD5','青、アクセント 5'],['#70AD47','緑、アクセント 6']];
+const OC_ACC=[['l',.8],['l',.6],['l',.4],['d',.25],['d',.5]];
+const OC_STD=[['#C00000','濃い赤'],['#FF0000','赤'],['#FFC000','オレンジ'],['#FFFF00','黄'],['#92D050','薄い緑'],['#00B050','緑'],['#00B0F0','薄い青'],['#0070C0','青'],['#002060','濃い青'],['#7030A0','紫']];
+const OC_STYLE_COLS=['#404040','#4472C4','#ED7D31','#A5A5A5','#FFC000','#5B9BD5','#70AD47'];
+const OC_WEIGHTS=[0.5,0.75,1,1.5,2.25,3,4.5,6];
+const OC_GRAD_DIRS=[['r','右へ',0,0,1,0],['b','下へ',0,0,0,1],['d','右下へ',0,0,1,1],['l','左へ',1,0,0,0],['t','上へ',0,1,0,0],['u','左上へ',1,1,0,0]];
+function ocTint(h,op){ return (op[0]==='l'?ganttLighten(h,op[1]):ganttDarken(h,op[1])).toUpperCase(); }
+function ocTintName(nm,op){ return nm+'、'+(op[0]==='l'?'白 + 基本色 ':'黒 + 基本色 ')+Math.round(op[1]*100)+'%'; }
+function ocLum(h){ const [r,g,b]=ganttHexToRgb(h); return (0.299*r+0.587*g+0.114*b)/255; }
+// 最近使用した色（10 色まで・このブラウザに覚える。図のデータには入れない＝未保存の印が付かない）
+let ocRecent=[];
+try{ const a=JSON.parse(localStorage.getItem('bdm-recent-colors')||'[]'); if(Array.isArray(a)) ocRecent=a.map(ocHex).filter(Boolean).slice(0,10); }catch(e){}
+function ocPushRecent(c){ c=ocHex(c); if(!c) return; c=c.toUpperCase(); ocRecent=[c,...ocRecent.filter(x=>x.toUpperCase()!==c)].slice(0,10);
+  try{ localStorage.setItem('bdm-recent-colors',JSON.stringify(ocRecent)); }catch(e){} }
+// ボタンの左側を押したときに塗る色（Office と同じ＝直前に使った色）
+const ocLast={fill:'#5B9BD5',line:'#ED7D31',font:'#FF0000',style:{fill:'#dbeafe',stroke:'#3b82f6',text:null}};
+const OC_ICON={
+  fill:'<svg width="18" height="15" viewBox="0 0 18 15"><path d="M7.2 1.2 2 6.4a1 1 0 0 0 0 1.4l4 4a1 1 0 0 0 1.4 0l5.2-5.2z" fill="#fff" stroke="#3b3b3b" stroke-width="1.1" stroke-linejoin="round"/><path d="M5.6 2.8 4.2 1.4" stroke="#3b3b3b" stroke-width="1.1" stroke-linecap="round"/><path d="M14.6 8.2c.9 1.3 1.5 2.2 1.5 3a1.5 1.5 0 0 1-3 0c0-.8.6-1.7 1.5-3z" fill="#3b3b3b"/></svg>',
+  line:'<svg width="18" height="15" viewBox="0 0 18 15"><path d="M3 12l.8-3.2L11.4 1.2a1.2 1.2 0 0 1 1.7 0l.9.9a1.2 1.2 0 0 1 0 1.7L6.4 11.4z" fill="#fff" stroke="#3b3b3b" stroke-width="1.1" stroke-linejoin="round"/><path d="M10.2 2.6l2.6 2.6" stroke="#3b3b3b" stroke-width="1.1"/></svg>',
+  font:'<svg width="18" height="15" viewBox="0 0 18 15"><text x="9" y="13" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" fill="#3b3b3b">A</text></svg>',
+  none:'<svg width="16" height="14" viewBox="0 0 16 14"><rect x="1.5" y="1.5" width="13" height="11" fill="#fff" stroke="#777"/><path d="M1.5 12.5 14.5 1.5" stroke="#d13438" stroke-width="1.2"/></svg>',
+  more:'<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="#fff" stroke="#777"/><circle cx="8" cy="4.6" r="1.5" fill="#d13438"/><circle cx="4.9" cy="7.6" r="1.5" fill="#ffb900"/><circle cx="6.2" cy="11" r="1.5" fill="#107c10"/><circle cx="10.6" cy="10.6" r="1.5" fill="#0078d4"/></svg>',
+  weight:'<svg width="16" height="14" viewBox="0 0 16 14"><path d="M1 2.5h14" stroke="#3b3b3b" stroke-width="1"/><path d="M1 6.5h14" stroke="#3b3b3b" stroke-width="2"/><path d="M1 11h14" stroke="#3b3b3b" stroke-width="3"/></svg>',
+  dash:'<svg width="16" height="14" viewBox="0 0 16 14"><path d="M1 2.5h14" stroke="#3b3b3b" stroke-width="1.3"/><path d="M1 7h14" stroke="#3b3b3b" stroke-width="1.3" stroke-dasharray="4,2"/><path d="M1 11.5h14" stroke="#3b3b3b" stroke-width="1.3" stroke-dasharray="1.5,1.5"/></svg>',
+  grad:'<svg width="16" height="14" viewBox="0 0 16 14"><defs><linearGradient id="oc-ic-g" x1="0" x2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#4472C4"/></linearGradient></defs><rect x="1.5" y="1.5" width="13" height="11" fill="url(#oc-ic-g)" stroke="#777"/></svg>',
+  auto:'<span style="width:14px;height:14px;background:#000;border:1px solid #777;display:block"></span>'
+};
+function ocClose(){ if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;} document.getElementById('lane-choice')?.remove(); document.querySelectorAll('.osplit.open').forEach(b=>b.classList.remove('open')); }
+function ocEl(tag,cls,html){ const x=document.createElement(tag); if(cls) x.className=cls; if(html!=null) x.innerHTML=html; return x; }
+// 色の一覧を開く。cfg={cur, presets:[{fill,stroke,text,name}], presetTitle, presetCols, onPreset(p), noGrid, onPick(hex),
+//   top:[項目], items:[項目], side, z}。項目＝{icon,label,key,on(),sub(箱)}（sub があれば右に開く一覧）
+function ocOpen(anchor,cfg){
+  { const sp0=anchor.closest&&anchor.closest('.osplit'); if(sp0&&sp0.classList.contains('open')){ ocClose(); return null; } }   // 開いている▾をもう一度押すと閉じる
+  ocClose();
+  const dlg=ocEl('div','ocp'); dlg.id='lane-choice'; if(cfg.z) dlg.style.zIndex=cfg.z; if(cfg.width) dlg.style.width=cfg.width+'px';
+  dlg.addEventListener('mousedown',ev=>ev.preventDefault());   // 文字の編集欄のフォーカスを奪わない
+  const cur=(ocHex(cfg.cur)||'').toUpperCase();
+  const pick=c=>{ ocClose(); ocPushRecent(c); cfg.onPick(c); };
+  const sw=(c,nm)=>{ const s=ocEl('div','oc-sw'+(c.toUpperCase()===cur?' sel':'')); s.style.background=c; s.title=nm||c; s.addEventListener('click',ev=>{ev.stopPropagation();pick(c);}); return s; };
+  const head=t=>dlg.appendChild(ocEl('div','oc-hd')).textContent=t;
+  const grid=cls=>dlg.appendChild(ocEl('div','oc-grid'+(cls?' '+cls:'')));
+  const item=it=>{ const r=ocEl('div','oc-item'+(it.checked?' chk':''),`<span class="ic">${it.icon||''}</span><span>${it.label}${it.key?`(<u>${it.key}</u>)`:''}${it.dots?'...':''}</span>${it.sub?'<span class="arr">▶</span>':''}`);
+    if(it.sub){ const box=ocEl('div','oc-sub'); it.sub(box); r.appendChild(box);
+      r.addEventListener('mouseenter',()=>{ box.style.display='block'; box.style.left='100%'; box.style.right='auto'; box.style.top='-4px';
+        const b=box.getBoundingClientRect(); if(b.right>window.innerWidth-4){ box.style.left='auto'; box.style.right='100%'; }
+        if(b.bottom>window.innerHeight-4) box.style.top=(-4-(b.bottom-window.innerHeight+4))+'px'; });
+      r.addEventListener('mouseleave',()=>{ box.style.display='none'; });
+    } else r.addEventListener('click',ev=>{ev.stopPropagation();ocClose();it.on();});
+    dlg.appendChild(r); return r; };
+  if(cfg.title){ dlg.appendChild(ocEl('div','oc-title')).textContent=cfg.title; }
+  (cfg.top||[]).forEach(item);
+  if(cfg.presets&&cfg.presets.length){
+    if(cfg.presetTitle) head(cfg.presetTitle);
+    const g=dlg.appendChild(ocEl('div','oc-styles'+(cfg.width?'':' sm')));   // 幅の狭い一覧では見本を小さく（7 個が 1 行に入る）
+    cfg.presets.forEach(p=>{ const fill=ocHex(p.fill)||'#ffffff', stroke=ocHex(p.stroke)||ganttStrokeFor(fill);
+      const c=ocEl('div','oc-style'+((cfg.curPreset&&cfg.curPreset(p))?' sel':'')); c.textContent='Abc'; c.title=p.name||'';
+      c.style.background=fill; c.style.borderColor=stroke; c.style.color=ocHex(p.text)||ganttTextOn(fill);
+      if(!cfg.width) c.textContent='Ab';
+      c.addEventListener('click',ev=>{ev.stopPropagation();ocClose();cfg.onPreset(Object.assign({},p,{fill,stroke}));}); g.appendChild(c); });
+  }
+  if(!cfg.noGrid){
+    head('テーマの色');
+    const g1=grid('top'); OC_THEME.forEach(t=>g1.appendChild(sw(t[0],t[1])));
+    const g2=grid(); for(let r=0;r<5;r++) OC_THEME.forEach(t=>{ const op=(t[2]||OC_ACC)[r]; g2.appendChild(sw(ocTint(t[0],op),ocTintName(t[1],op))); });
+    dlg.appendChild(ocEl('div','oc-gap'));
+    head('標準の色'); const g3=grid(); OC_STD.forEach(s=>g3.appendChild(sw(s[0],s[1])));
+    dlg.appendChild(ocEl('div','oc-gap'));
+    if(ocRecent.length){ head('最近使用した色'); const g4=grid(); ocRecent.forEach(c=>g4.appendChild(sw(c,c))); dlg.appendChild(ocEl('div','oc-gap')); }
+  }
+  if((cfg.items||[]).length) dlg.appendChild(ocEl('div','oc-line'));
+  (cfg.items||[]).forEach(item);
   document.body.appendChild(dlg);
-  { // v8.14: サイドバーから開くと下へ長く伸びるため、画面からはみ出す分を上へ寄せる
-    const _r=dlg.getBoundingClientRect();
-    if(_r.bottom>window.innerHeight-6) dlg.style.top=Math.max(4,window.innerHeight-_r.height-6)+'px'; }
-  _laneChoiceRemoveClose=bindOutsideClose(dlg,closeDlg);   // v8.29: 外側の押下で閉じる（キャプチャ段階＝図の中でも閉じる）
+  const r=anchor.getBoundingClientRect(), b=dlg.getBoundingClientRect();
+  let x=cfg.side?r.right+3:r.left, y=cfg.side?r.top:r.bottom+1;
+  if(!cfg.side&&y+b.height>window.innerHeight-4&&r.top-b.height-1>=4) y=r.top-b.height-1;   // 下に入らなければボタンの上へ
+  x=Math.min(Math.max(4,x),Math.max(4,window.innerWidth-b.width-4)); y=Math.min(Math.max(4,y),Math.max(4,window.innerHeight-b.height-4));
+  dlg.style.left=x+'px'; dlg.style.top=y+'px';
+  const sp=anchor.closest&&anchor.closest('.osplit'); if(sp) sp.classList.add('open');
+  _laneChoiceRemoveClose=bindOutsideClose(dlg,ocClose,{ignore:sp||anchor});
+  return dlg;
 }
+// ── 「色の設定」の画面（その他の色）。o={cur,alpha,showAlpha,onOK(hex,alpha)} ──
+function ocRgb2Hsl(r,g,b){ r/=255;g/=255;b/=255; const mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2; let h=0,s=0;
+  if(mx!==mn){ const d=mx-mn; s=l>0.5?d/(2-mx-mn):d/(mx+mn); h=mx===r?((g-b)/d+(g<b?6:0)):mx===g?((b-r)/d+2):((r-g)/d+4); h*=60; } return [h,s,l]; }
+function ocHsl2Rgb(h,s,l){ const a=s*Math.min(l,1-l), f=n=>{ const k=(n+h/30)%12; return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))); }; return [f(0),f(8),f(4)]; }
+function ocHexPath(cx,cy,R){ let d=''; for(let i=0;i<6;i++){ const a=Math.PI/180*(60*i-90); d+=(i?'L':'M')+(cx+R*Math.cos(a)).toFixed(2)+' '+(cy+R*Math.sin(a)).toFixed(2); } return d+'Z'; }
+function ocDialog(o){
+  ocClose(); document.getElementById('oc-dlg')?.remove();
+  const cur=ocHex(o.cur)||'#FFFFFF';
+  let [R,G,B]=ganttHexToRgb(cur), [H,Sa,L]=ocRgb2Hsl(R,G,B), alpha=ocPct(o.alpha), tab='std', model='RGB';
+  const root=ocEl('div'); root.id='oc-dlg';
+  root.innerHTML=`<div class="ocd-bg"></div><div class="ocd-box" role="dialog" aria-label="色の設定"><div class="ocd-tt"><b>色の設定</b><button type="button" class="ocd-x" title="閉じる">✕</button></div>
+   <div class="ocd-bd"><div class="ocd-left"><div class="ocd-tabs"><div data-t="std">標準</div><div data-t="custom">ユーザー設定</div></div><div class="ocd-pane"></div></div>
+   <div class="ocd-right"><button type="button" class="ocd-btn def" data-a="ok">OK</button><button type="button" class="ocd-btn" data-a="cancel">キャンセル</button>
+   <div class="ocd-newcur">新規<div class="bx"><div class="nw"></div><div class="cu"></div></div>現在</div></div></div>
+   <div class="ocd-alpha"${o.showAlpha?'':' style="display:none"'}><span>透過性(<u>T</u>):</span><input type="range" min="0" max="100" step="1" class="ocd-ar"><input type="number" min="0" max="100" class="ocd-an"><span>%</span></div></div>`;
+  document.body.appendChild(root);
+  const $=q=>root.querySelector(q), pane=$('.ocd-pane'), hexNow=()=>ganttToHex(R,G,B).toUpperCase();
+  $('.cu').style.background=cur;
+  const close=()=>{ root.remove(); document.removeEventListener('keydown',onKey,true); };
+  const ok=()=>{ const c=hexNow(); close(); ocPushRecent(c); o.onOK(c,alpha); };
+  const onKey=ev=>{ if(ev.key==='Escape'){ ev.preventDefault(); ev.stopPropagation(); close(); } else if(ev.key==='Enter'&&ev.target.tagName!=='BUTTON'){ ev.preventDefault(); ev.stopPropagation(); ok(); } else ev.stopPropagation(); };
+  document.addEventListener('keydown',onKey,true);
+  $('.ocd-bg').addEventListener('mousedown',close); $('.ocd-x').addEventListener('click',close);
+  $('[data-a=ok]').addEventListener('click',ok); $('[data-a=cancel]').addEventListener('click',close);
+  const ar=$('.ocd-ar'), an=$('.ocd-an'); ar.value=an.value=alpha;
+  ar.addEventListener('input',()=>{ alpha=ocPct(ar.value); an.value=alpha; preview(); });
+  an.addEventListener('input',()=>{ alpha=ocPct(an.value); ar.value=alpha; preview(); });
+  const preview=()=>{ const nw=$('.nw'); nw.style.background=hexNow(); nw.style.opacity=String(1-alpha/100); };
+  const setRgb=(r,g,b)=>{ R=r;G=g;B=b; const hsl=ocRgb2Hsl(r,g,b); if(hsl[1]>0) H=hsl[0]; if(hsl[2]>0&&hsl[2]<1) Sa=hsl[1]; L=hsl[2]; };
+  const setHsl=(h,s,l)=>{ H=h;Sa=s;L=l; [R,G,B]=ocHsl2Rgb(h,s,l); };
+  const drawStd=()=>{
+    const Rr=9.2, W=Rr*Math.sqrt(3), N=6, snap51=v=>Math.round(v/51)*51; let cells='';
+    const cell=(x,y,c)=>{ cells+=`<path class="hx" data-c="${c}" d="${ocHexPath(x,y,Rr)}" fill="${c}" stroke="#fff" stroke-width=".6"/>`; };
+    for(let r=-N;r<=N;r++) for(let q=-N;q<=N;q++){ const s=-q-r, dist=Math.max(Math.abs(q),Math.abs(r),Math.abs(s)); if(dist>N) continue;
+      const x=W*(q+r/2), y=1.5*Rr*r, t=dist/N, hue=(Math.atan2(y,x)*180/Math.PI+360+150)%360;
+      const l=dist===0?1:Math.max(.2,Math.min(.95,(1-0.5*t)-(y/(1.5*Rr*N))*0.14*t));
+      cell(x,y,dist===0?'#FFFFFF':ganttToHex(...ocHsl2Rgb(hue,1,l).map(snap51)).toUpperCase()); }
+    for(let i=0;i<15;i++){ const v=Math.round(255-255*i/14); cell((i-7)*W*0.5,122+(i%2?1.5*Rr:0),ganttToHex(v,v,v).toUpperCase()); }
+    pane.innerHTML=`<div>色(<u>C</u>):</div><svg class="ocd-hex" width="260" height="262" viewBox="-130 -108 260 262">${cells}<path class="hxsel" d="" fill="none" stroke="#000" stroke-width="2" pointer-events="none"/></svg>`;
+    const mark=()=>{ const c=hexNow(), e2=[...pane.querySelectorAll('.hx')].find(p=>p.dataset.c===c); pane.querySelector('.hxsel').setAttribute('d',e2?e2.getAttribute('d'):''); };
+    pane.querySelectorAll('.hx').forEach(p=>p.addEventListener('click',()=>{ const [r,g,b]=ganttHexToRgb(p.dataset.c); setRgb(r,g,b); mark(); preview(); }));
+    pane.querySelectorAll('.hx').forEach(p=>p.addEventListener('dblclick',ok));
+    mark();
+  };
+  const drawCustom=()=>{
+    const lab=model==='RGB'?[['赤','R'],['緑','G'],['青','B']]:[['色合い','U'],['鮮やかさ','S'],['明るさ','L']];
+    pane.innerHTML=`<div>色(<u>C</u>):</div><div class="ocd-cf"><div class="ocd-field"><i></i></div><div class="ocd-lum"><i>◀</i></div></div>
+      <div class="ocd-f"><label>カラー モデル(<u>D</u>):</label><select class="ocd-model"><option>RGB</option><option>HSL</option></select></div>
+      ${lab.map((l,i)=>`<div class="ocd-f"><label>${l[0]}(<u>${l[1]}</u>):</label><input type="number" min="0" max="255" class="ocd-n" data-i="${i}"></div>`).join('')}
+      <div class="ocd-f"><label>16 進(<u>H</u>):</label><input type="text" class="ocd-hx" maxlength="7" spellcheck="false"></div>`;
+    const field=pane.querySelector('.ocd-field'), cross=field.firstChild, lum=pane.querySelector('.ocd-lum'), arrow=lum.firstChild, ns=[...pane.querySelectorAll('.ocd-n')], hx=pane.querySelector('.ocd-hx'), ms=pane.querySelector('.ocd-model');
+    ms.value=model; ms.addEventListener('change',()=>{ model=ms.value; drawCustom(); });
+    const sync=skip=>{ cross.style.left=(H/360*100)+'%'; cross.style.top=((1-Sa)*100)+'%'; arrow.style.top=((1-L)*100)+'%';
+      lum.style.background=`linear-gradient(to bottom,#fff,${ganttToHex(...ocHsl2Rgb(H,Sa,.5))},#000)`;
+      const v=model==='RGB'?[R,G,B]:[Math.round(H/360*255),Math.round(Sa*255),Math.round(L*255)];
+      ns.forEach((n,i)=>{ if(n!==skip) n.value=v[i]; }); if(hx!==skip) hx.value=hexNow(); preview(); };
+    const drag=(el,fn)=>el.addEventListener('mousedown',ev=>{ ev.preventDefault(); const mv=e2=>{ const b=el.getBoundingClientRect(); fn(Math.max(0,Math.min(1,(e2.clientX-b.left)/b.width)),Math.max(0,Math.min(1,(e2.clientY-b.top)/b.height))); sync(); };
+      const up=()=>{ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }; document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up); mv(ev); });
+    drag(field,(x,y)=>{ const l=(L<=0||L>=1)?0.5:L; setHsl(x*360,1-y,l); });
+    drag(lum,(x,y)=>setHsl(H,Sa,1-y));
+    ns.forEach(n=>n.addEventListener('input',()=>{ const v=ns.map(x=>Math.max(0,Math.min(255,Math.round(Number(x.value)||0))));
+      if(model==='RGB') setRgb(v[0],v[1],v[2]); else setHsl(v[0]/255*360,v[1]/255,v[2]/255); sync(n); }));
+    hx.addEventListener('input',()=>{ let t=hx.value.trim(); if(t&&t[0]!=='#') t='#'+t; if(ocHex(t)){ const [r,g,b]=ganttHexToRgb(t); setRgb(r,g,b); sync(hx); } });
+    sync();
+  };
+  const show=t=>{ tab=t; root.querySelectorAll('.ocd-tabs div').forEach(d=>d.classList.toggle('on',d.dataset.t===t)); (t==='std'?drawStd:drawCustom)(); preview(); };
+  root.querySelectorAll('.ocd-tabs div').forEach(d=>d.addEventListener('click',()=>show(d.dataset.t)));
+  show(o.tab||'custom');
+}
+// ── 選んだものへ色を入れる ──
+function ocNodes(){ return S.sel.map(id=>S.nodes.find(n=>n.id===id)).filter(Boolean); }
+function ocEdges(){ return S.sel.map(id=>S.edges.find(x=>x.id===id)).filter(Boolean); }
+function ocPair(n){ return /^(gantt_|mind_)/.test(n.type); }   // 1 色選ぶと塗りと枠の組を自動で作る（従来の動き）
+function ocDone(msg){ snap(); render(); if(msg) hint(msg); }
+function ocNeed(list,msg){ if(list.length) return true; hint(msg); return false; }
+function ocSetFill(c,t){ const ns=ocNodes(); if(!ocNeed(ns,'塗りつぶすシェイプを選択してください')) return;
+  ns.forEach(n=>{ n.color=c; delete n.fillNone; delete n.grad; if(ocPct(t)&&!ocPair(n)) n.fillT=ocPct(t); else delete n.fillT;
+    if(ocPair(n)) n.stroke=ganttStrokeFor(c); if(n.type==='gantt_summary') ganttSyncPhaseTaskColors(n); });
+  ocLast.fill=c; ocDone(); }
+function ocSetPair(p){ const ns=ocNodes(); if(!ns.length) return; ns.forEach(n=>{ n.color=p.fill; n.stroke=p.stroke; delete n.fillNone; delete n.grad; delete n.fillT; if(n.type==='gantt_summary') ganttSyncPhaseTaskColors(n); }); ocDone(); }
+function ocNoFill(){ const ns=ocNodes().filter(n=>!ocPair(n)); if(!ocNeed(ns,'「塗りつぶしなし」にできるシェイプを選択してください')) return;
+  ns.forEach(n=>{ n.fillNone=true; delete n.grad; delete n.fillT; }); ocDone(); }
+function ocSetGrad(dir,c2){ const ns=ocNodes().filter(n=>!ocPair(n)); if(!ocNeed(ns,'グラデーションにできるシェイプを選択してください')) return;
+  ns.forEach(n=>{ if(dir){ const base=n.color||(SD[n.type]||SD.rect).fill; n.grad={dir,color:c2==='light'?'#FFFFFF':c2==='dark'?ganttDarken(base,.5):c2}; delete n.fillNone; } else delete n.grad; }); ocDone(); }
+function ocSetLine(c,t){ const ns=ocNodes(), es=ocEdges(); if(!ocNeed([...ns,...es],'枠線の色を変えるシェイプまたは接続線を選択してください')) return;
+  ns.forEach(n=>{ n.stroke=c; delete n.strokeNone; if(ocPct(t)&&!ocPair(n)) n.strokeT=ocPct(t); else delete n.strokeT; });
+  es.forEach(x=>{ x.color=c; }); ocLast.line=c; ocDone(); }
+function ocNoLine(){ const ns=ocNodes().filter(n=>!ocPair(n)); if(!ocNeed(ns,'「枠線なし」にできるシェイプを選択してください（接続線は消せません）')) return;
+  ns.forEach(n=>{ n.strokeNone=true; delete n.strokeT; }); ocDone(); }
+function ocSetWeight(w){ const ns=ocNodes().filter(n=>!ocPair(n)), es=ocEdges(); if(!ocNeed([...ns,...es],'太さを変えるシェイプまたは接続線を選択してください')) return;
+  [...ns,...es].forEach(x=>{ if(w===1.5) delete x.sw; else x.sw=w; }); ns.forEach(n=>delete n.strokeNone); ocDone(); }
+function ocSetDash(on){ const ts=dashTargets(); if(!ocNeed(ts,'点線にするシェイプまたは接続線を選択してください')) return;
+  ts.forEach(t=>{ if(on) t.dashed=true; else delete t.dashed; }); ocDone(); }
+function ocSetFont(c){ const ns=ocNodes().filter(n=>!ocPair(n)); if(!ocNeed(ns,'文字の色を変えるシェイプを選択してください（工程表・マインドマップの文字の色は変えられません）')) return;
+  ns.forEach(n=>{ if(c) n.textColor=c; else delete n.textColor; }); if(c) ocLast.font=c; ocDone(); }
+function ocSetStyle(p){ const ns=ocNodes(); if(!ocNeed(ns,'色を変えるシェイプを選択してください')) return;
+  ns.forEach(n=>{ ['fillNone','strokeNone','grad','fillT','strokeT','textColor'].forEach(k=>delete n[k]);
+    if(p){ n.color=p.fill; n.stroke=p.stroke; if(p.text&&!ocPair(n)) n.textColor=p.text; } else { delete n.color; delete n.stroke; delete n.sw; }
+    if(n.type==='gantt_summary') ganttSyncPhaseTaskColors(n); });
+  if(p) ocLast.style={fill:p.fill,stroke:p.stroke,text:p.text||null}; ocDone(); }
+function ocFirst(){ return ocNodes()[0]||null; }
+function ocMoreItem(label,kind){ return {icon:OC_ICON.more,label,key:'M',dots:true,on:()=>{ const n=ocFirst(), ed=ocEdges()[0];
+  const d=n?(SD[n.type]||SD.rect):null, pair=n&&ocPair(n);
+  if(kind==='fill') ocDialog({cur:(n&&(n.color||d.fill))||ocLast.fill,alpha:n&&n.fillT,showAlpha:!pair,onOK:(c,a)=>ocSetFill(c,a)});
+  else if(kind==='line') ocDialog({cur:(n&&(n.stroke||d.stroke))||(ed&&ed.color)||ocLast.line,alpha:n&&n.strokeT,showAlpha:!!n&&!pair,onOK:(c,a)=>ocSetLine(c,a)});
+  else ocDialog({cur:(n&&n.textColor)||'#1E293B',onOK:c=>ocSetFont(c)}); }}; }
+function ocFillMenu(ev){ const a=ev.currentTarget, ns=ocNodes(), n=ns[0], d=n?(SD[n.type]||SD.rect):null;
+  const pairAll=ns.length>0&&ns.every(ocPair), phaseAll=ns.length>0&&ns.every(x=>x.type==='gantt_summary');
+  const cfg={cur:n&&(n.color||d.fill),onPick:c=>ocSetFill(c),items:[]};
+  if(pairAll){ cfg.presets=phaseAll?GANTT_PHASE_COLORS:GANTT_COLORS; cfg.presetTitle='これまでの色'; cfg.presetCols=7; cfg.onPreset=p=>ocSetPair(p);
+    cfg.items.push({icon:OC_ICON.none,label:'標準の色に戻す',key:'N',on:()=>ocSetStyle(null)}); }
+  else cfg.items.push({icon:OC_ICON.none,label:'塗りつぶしなし',key:'N',on:ocNoFill});
+  cfg.items.push(ocMoreItem('塗りつぶしの色','fill'));
+  if(!pairAll) cfg.items.push({icon:OC_ICON.grad,label:'グラデーション',key:'G',sub:box=>{
+    const base=(n&&(n.color||d.fill))||ocLast.fill, mk=(t,c2,kind)=>{ box.appendChild(ocEl('div','oc-hd')).textContent=t; const g=box.appendChild(ocEl('div','oc-grads'));
+      OC_GRAD_DIRS.forEach(dr=>{ const c=ocEl('div','oc-gradc'); c.title=dr[1]; c.style.background=`linear-gradient(${({r:'to right',b:'to bottom',d:'135deg',l:'to left',t:'to top',u:'315deg'})[dr[0]]},${c2},${base})`;
+        c.addEventListener('click',ev2=>{ev2.stopPropagation();ocClose();ocSetGrad(dr[0],kind);}); g.appendChild(c); }); };
+    const no=ocEl('div','oc-item',`<span class="ic">${OC_ICON.none}</span><span>グラデーションなし(<u>N</u>)</span>`); no.addEventListener('click',ev2=>{ev2.stopPropagation();ocClose();ocSetGrad(null);}); box.appendChild(no);
+    mk('淡色のバリエーション','#FFFFFF','light'); mk('濃色のバリエーション',ganttDarken(base,.5),'dark'); box.appendChild(ocEl('div','oc-line'));
+    const mo=ocEl('div','oc-item',`<span class="ic">${OC_ICON.grad}</span><span>その他のグラデーション(<u>M</u>)...</span>`);
+    mo.addEventListener('click',ev2=>{ev2.stopPropagation();ocClose();ocDialog({cur:(n&&n.grad&&n.grad.color)||'#FFFFFF',onOK:c=>ocSetGrad((n&&n.grad&&n.grad.dir)||'r',c)});}); box.appendChild(mo); }});
+  ocOpen(a,cfg); }
+function ocLineMenu(ev){ const a=ev.currentTarget, n=ocFirst(), ed=ocEdges()[0], d=n?(SD[n.type]||SD.rect):null, curW=(n&&n.sw)||(ed&&ed.sw)||1.5, curD=!!((n&&n.dashed)||(ed&&ed.dashed));
+  ocOpen(a,{cur:(n&&(n.stroke||d.stroke))||(ed&&ed.color),onPick:c=>ocSetLine(c),items:[
+    {icon:OC_ICON.none,label:'枠線なし',key:'N',on:ocNoLine}, ocMoreItem('その他の枠線の色','line'),
+    {icon:OC_ICON.weight,label:'太さ',key:'W',sub:box=>{ box.style.width='200px'; OC_WEIGHTS.forEach(w=>{ const r=ocEl('div','oc-wrow'+(w===curW?' sel':''),`<span>${w} px</span><i style="height:${Math.max(.6,w)}px"></i>`); if(w===1.5) r.title='標準の太さ';
+      r.addEventListener('click',ev2=>{ev2.stopPropagation();ocClose();ocSetWeight(w);}); box.appendChild(r); }); }},
+    {icon:OC_ICON.dash,label:'実線/点線',key:'S',sub:box=>{ box.style.width='200px'; [[false,''],[true,NODE_DASH]].forEach(([on,da])=>{ const r=ocEl('div','oc-wrow'+(on===curD?' sel':''),`<span>${on?'点線':'実線'}</span><svg width="110" height="8"><path d="M0 4h110" stroke="#222" stroke-width="2" ${da?`stroke-dasharray="${da}"`:''}/></svg>`);
+      r.addEventListener('click',ev2=>{ev2.stopPropagation();ocClose();ocSetDash(on);}); box.appendChild(r); }); }} ]}); }
+function ocFontMenu(ev){ const n=ocFirst(); ocOpen(ev.currentTarget,{cur:n&&n.textColor,onPick:c=>ocSetFont(c),top:[{icon:OC_ICON.auto,label:'自動',key:'A',on:()=>ocSetFont(null)}],items:[ocMoreItem('その他の色','font')]}); }
+function ocStylePresets(){ const P=[];
+  OC_STYLE_COLS.forEach(c=>P.push({fill:'#FFFFFF',stroke:c,text:null,name:'白の塗り＋色の枠線'}));
+  OC_STYLE_COLS.forEach(c=>P.push({fill:ganttLighten(c,.8).toUpperCase(),stroke:c,text:null,name:'淡い塗り＋色の枠線'}));
+  OC_STYLE_COLS.forEach(c=>P.push({fill:c,stroke:ganttDarken(c,.25).toUpperCase(),text:'#FFFFFF',name:'濃い塗り＋白の文字'}));
+  return P; }
+function ocStyleMenu(ev){ const n=ocFirst(), same=p=>!!n&&String(n.color||'').toUpperCase()===p.fill.toUpperCase()&&String(n.stroke||'').toUpperCase()===String(p.stroke).toUpperCase();
+  const dlg=ocOpen(ev.currentTarget,{noGrid:true,width:306,presets:ocStylePresets(),presetTitle:'塗り・枠線・文字の色をまとめて設定',presetCols:7,curPreset:same,onPreset:p=>ocSetStyle(p),onPick:()=>{},
+    items:[{icon:OC_ICON.none,label:'標準の色に戻す',key:'N',on:()=>ocSetStyle(null)}]});
+  if(!dlg) return;
+  // これまでの色（v8.33 までの「色」ボタンと同じ 6 色）
+  const hd=ocEl('div','oc-hd'); hd.textContent='これまでの色'; const g=ocEl('div','oc-styles'); g.style.gridTemplateColumns='repeat(7,34px)';
+  GANTT_COLORS.forEach(p=>{ const c=ocEl('div','oc-style'+(same(p)?' sel':'')); c.textContent='Abc'; c.title=p.name; c.style.background=p.fill; c.style.borderColor=p.stroke; c.style.color='#1e293b';
+    c.addEventListener('click',ev2=>{ev2.stopPropagation();ocClose();ocSetStyle({fill:p.fill,stroke:p.stroke,text:null});}); g.appendChild(c); });
+  const line=dlg.querySelector('.oc-line'); dlg.insertBefore(hd,line); dlg.insertBefore(g,line);
+  const b=dlg.getBoundingClientRect(); if(b.bottom>window.innerHeight-4) dlg.style.top=Math.max(4,window.innerHeight-b.height-4)+'px'; }
+// ボタンの色の線・見本を今の「直前の色」に合わせる（render から毎回）
+function ocSyncUI(){ const set=(id,c)=>{ const x=document.getElementById(id); if(x) x.style.background=c; };
+  set('oc-bar-fill',ocLast.fill); set('oc-bar-line',ocLast.line); set('oc-bar-font',ocLast.font);
+  const s=document.getElementById('oc-style-sample'); if(s){ s.style.background=ocLast.style.fill; s.style.borderColor=ocLast.style.stroke; s.style.color=ocLast.style.text||'#1e293b'; } }
+// ── 描画: シェイプの絵（shapeEl の戻り値）に、塗りなし・透過性・グラデーション・枠線なし・太さを重ねる ──
+//   塗りの色・枠線の色と同じ値を持つ要素だけを書き換える（種類ごとの描き方には手を入れない＝点線と同じ流儀）
+function ocPaintShape(n,ng,shp,sel){
+  if(!shp||!(n.fillNone||n.grad||n.fillT||n.strokeNone||n.sw||n.strokeT)) return;
+  const d=SD[n.type]||SD.rect, fillC=String(n.color||d.fill).toLowerCase(), st=String(sel?'#2563eb':(n.stroke||d.stroke)).toLowerCase();
+  const sw=Number(n.sw), hasW=Number.isFinite(sw)&&sw>0&&sw<=20, fo=n.fillNone?0:(1-ocPct(n.fillT)/100), so=(n.strokeNone&&!sel)?0:(1-ocPct(n.strokeT)/100);
+  let gid=null; const c2=n.grad&&ocHex(n.grad.color), dr=n.grad&&OC_GRAD_DIRS.find(x=>x[0]===n.grad.dir);
+  if(c2&&dr&&!n.fillNone&&ocHex(n.color||d.fill)){ gid='ocg-'+String(n.id).replace(/[^A-Za-z0-9_-]/g,'');
+    const lg=e('linearGradient',{id:gid,x1:dr[2],y1:dr[3],x2:dr[4],y2:dr[5]}); lg.appendChild(e('stop',{offset:0,'stop-color':c2})); lg.appendChild(e('stop',{offset:1,'stop-color':n.color||d.fill})); ng.appendChild(lg); }
+  [shp,...shp.querySelectorAll('*')].forEach(el=>{ if(el.tagName==='text'||el.tagName==='tspan') return;
+    if((el.getAttribute('fill')||'').toLowerCase()===fillC){ if(gid) el.setAttribute('fill',`url(#${gid})`); if(fo<1) el.setAttribute('fill-opacity',fo); }
+    if((el.getAttribute('stroke')||'').toLowerCase()===st){ if(so<1) el.setAttribute('stroke-opacity',so);
+      if(hasW){ const w=parseFloat(el.getAttribute('stroke-width')); if(Number.isFinite(w)&&w>=1.2) el.setAttribute('stroke-width',sel?Math.max(w,sw+1):sw); } } });
+}
+const OC_TEXT_DARK=new Set(['#1e293b','#475569','#374151','#334155','#0f172a']);
+function ocPaintText(n,ng){ const c=ocHex(n.textColor); if(!c) return;
+  ng.querySelectorAll('text').forEach(t=>{ if(OC_TEXT_DARK.has((t.getAttribute('fill')||'').toLowerCase())) t.setAttribute('fill',c); }); }
+// 接続線: 色の付いた線の矢印（色ごとに marker を 1 つ作る）と太さ
+function ocEdgeColor(ed,isSel){ return isSel?null:ocHex(ed.color); }
+function ocArrow(c){ const id='arr-c-'+c.slice(1).toLowerCase(); if(!document.getElementById(id)){ const base=document.getElementById('arr'); if(!base) return 'url(#arr)';
+    const m=base.cloneNode(true); m.id=id; m.querySelectorAll('path').forEach(p=>p.setAttribute('fill',c)); base.parentNode.appendChild(m); } return `url(#${id})`; }
+function ocEdgeW(ed,isSel){ const w=Number(ed.sw), ok=Number.isFinite(w)&&w>0&&w<=20; return isSel?Math.max(2,ok?w+0.5:0):(ok?w:1.5); }
 // ── v8.01: レーンの色変更メニュー（サイドバーの色ドットから開く） ──
 //   LC のプリセット配色＋自由色。自由色は選んだ色から背景(淡)と見出し帯(中濃)を自動導出。色は各シェイプとは独立。
 function showLaneColorMenu(ev,laneId){
   ev.stopPropagation();
   const lane=S.lanes.find(l=>l.id===laneId); if(!lane)return;
-  if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;}
-  document.getElementById('lane-choice')?.remove();
-  const dlg=document.createElement('div'); dlg.id='lane-choice';
-  const b=ev.currentTarget?ev.currentTarget.getBoundingClientRect():{left:200,bottom:60};
-  dlg.style.left=Math.max(4,b.left)+'px'; dlg.style.top=(b.bottom+6)+'px';
-  const title=document.createElement('div'); title.className='lc-title';
-  title.textContent='レーンの色:'; dlg.appendChild(title);
-  const closeDlg=()=>{dlg.remove();if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;}};
-  const apply=(bg,hd)=>{ lane.bg=bg; lane.hd=hd; closeDlg(); lanePanel(); render(); };
-  const row=document.createElement('div');
-  row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;max-width:210px;align-items:center';
-  LC.forEach(c=>{
-    const sw=document.createElement('div');
-    sw.style.cssText=`width:26px;height:26px;border-radius:6px;cursor:pointer;background:${c.bg};box-shadow:inset 0 0 0 3px ${c.hd};`;
-    if(lane.bg===c.bg&&lane.hd===c.hd){ sw.style.outline='2px solid #1e293b'; sw.style.outlineOffset='1px'; }
-    sw.addEventListener('click',ev2=>{ev2.stopPropagation();apply(c.bg,c.hd);});
-    row.appendChild(sw);
-  });
-  // 自由色: 選んだ色を見出し帯とし、背景はその淡色を自動導出
-  const custom=document.createElement('input'); custom.type='color'; custom.title='自由な色';
-  custom.style.cssText='width:30px;height:26px;padding:0;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff';
-  custom.value=(/^#[0-9a-fA-F]{6}$/.test(lane.hd||''))?lane.hd:'#93c5fd';
-  custom.addEventListener('click',ev2=>ev2.stopPropagation());
-  custom.addEventListener('input',ev2=>{ev2.stopPropagation();apply(ganttLighten(custom.value,0.75),ganttLighten(custom.value,0.28));});
-  row.appendChild(custom);
-  dlg.appendChild(row);
-  document.body.appendChild(dlg);
-  { // v8.14: サイドバーから開くと下へ長く伸びるため、画面からはみ出す分を上へ寄せる
-    const _r=dlg.getBoundingClientRect();
-    if(_r.bottom>window.innerHeight-6) dlg.style.top=Math.max(4,window.innerHeight-_r.height-6)+'px'; }
-  _laneChoiceRemoveClose=bindOutsideClose(dlg,closeDlg);   // v8.29: 外側の押下で閉じる（キャプチャ段階＝図の中でも閉じる）
+  const apply=(bg,hd)=>{ lane.bg=bg; lane.hd=hd; lanePanel(); render(); };
+  // v8.34: Office と同じ色の一覧。1 色選ぶと背景と見出し帯の組を自動で作る（淡い色＝その色を見出し帯に・濃い色＝淡くして使う）
+  ocOpen(ev.currentTarget,{title:'レーンの色',cur:lane.hd,side:true,
+    presets:LC.map(c=>({fill:c.bg,stroke:c.hd,name:'これまでの色'})),presetTitle:'これまでの色',presetCols:7,
+    curPreset:p=>lane.bg===p.fill&&lane.hd===p.stroke,onPreset:p=>apply(p.fill,p.stroke),
+    onPick:c=>{ if(ocLum(c)>0.75) apply(ganttLighten(c,0.6),c); else apply(ganttLighten(c,0.75),ganttLighten(c,0.28)); },
+    items:[{icon:OC_ICON.more,label:'その他の色',key:'M',dots:true,on:()=>ocDialog({cur:lane.hd,onOK:c=>{ if(ocLum(c)>0.75) apply(ganttLighten(c,0.6),c); else apply(ganttLighten(c,0.75),ganttLighten(c,0.28)); }})}]});
 }
 // ── v8.01: デザインテンプレート選択メニュー（色は変えず装飾だけ切替） ──
 function showDesignMenu(ev){
@@ -17995,18 +18267,10 @@ function ganttLegendSetExtraColor(i,fill,stroke){ ganttEnsureHeader(); const ex=
 function ganttLegendColorMenu(ev,i){
   ev.stopPropagation(); ganttEnsureHeader();
   const ex=S.gantt.legend.extra[i]; if(!ex) return;
-  if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;}
-  document.getElementById('lane-choice')?.remove();
-  const dlg=document.createElement('div'); dlg.id='lane-choice'; dlg.style.zIndex='2100';
-  const btn=ev.currentTarget.getBoundingClientRect();
-  dlg.style.left=Math.max(4,btn.left)+'px'; dlg.style.top=(btn.bottom+6)+'px';
-  const title=document.createElement('div'); title.className='lc-title'; title.textContent='凡例の色:'; dlg.appendChild(title);
-  const closeDlg=()=>{dlg.remove();if(_laneChoiceRemoveClose){_laneChoiceRemoveClose();_laneChoiceRemoveClose=null;}};
-  dlg.appendChild(colorSwatchRow(GANTT_COLORS, ex.color, '#dcfce7', (fill,stroke)=>{ closeDlg(); ganttLegendSetExtraColor(i,fill,stroke); }));
-  document.body.appendChild(dlg);
-  { const _r=dlg.getBoundingClientRect();
-    if(_r.bottom>window.innerHeight-6) dlg.style.top=Math.max(4,btn.top-_r.height-6)+'px'; }   // 下に入らなければボタンの上へ
-  _laneChoiceRemoveClose=bindOutsideClose(dlg,closeDlg);
+  // v8.34: Office と同じ色の一覧（これまでの 6 色＋テーマの色・標準の色・その他の色）。枠の色は塗りから自動
+  ocOpen(ev.currentTarget,{z:2100,title:'凡例の色',cur:ex.color,presets:GANTT_COLORS,presetTitle:'これまでの色',presetCols:7,
+    curPreset:p=>ex.color===p.fill,onPreset:p=>ganttLegendSetExtraColor(i,p.fill,p.stroke),onPick:c=>ganttLegendSetExtraColor(i,c,ganttStrokeFor(c)),
+    items:[{icon:OC_ICON.more,label:'その他の色',key:'M',dots:true,on:()=>ocDialog({cur:ex.color,onOK:c=>ganttLegendSetExtraColor(i,c,ganttStrokeFor(c))})}]});
 }
 function ganttLegendRemoveExtra(i){ ganttEnsureHeader(); S.gantt.legend.extra.splice(i,1); render(); }
 // 入力中（テキスト入力にフォーカス）は動的リストを作り直さない＝キャレット/フォーカス維持
