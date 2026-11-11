@@ -344,7 +344,7 @@ DIAGRAM_TYPES[key] = {
 |---|---|---|
 | PNG | `expPNG` | `buildExportSvg`で白背景＋図面名タイトル帯（＋シェイプ凡例）付きSVGを生成→ラスタライズ |
 | SVG | `expSVG` | 同上（ベクター） |
-| PDF | `expPDF` | 印刷（`@page` 余白 10mm/左25mm・**size＝用紙欄の用紙**＝非ガントは常に・ガントはページ数指定のときだけ。v8.31追補⑥＝送信先は「PDFに保存」・PDF24 などプリンター経由では向きが縦になる。図面名帯の日付は右上＝凡例の上・v8.31追補⑦）。**非ガントは改ページ計画 `printPagePlan()` に従う**（下記）。**ガントはページ数（縦）指定時だけ `ganttPrintPlan()` に従う**（v8.31・指定なしは v4.30 方式B＝用紙自由） |
+| PDF | `expPDF` | 印刷（`@page` 余白 四辺 10mm＝`PAGE_MARGIN_LR`／`PAGE_MARGIN_TB`＝20・v8.34追補で左 25mm をやめた・**size＝用紙欄の用紙**＝非ガントは常に・ガントはページ数指定のときだけ。v8.31追補⑥＝送信先は「PDFに保存」・PDF24 などプリンター経由では向きが縦になる。図面名帯の日付は右上＝凡例の上・v8.31追補⑦。レーンの無い図は `printFrameNonLane` が印刷用の clone の `#g-lanes` の四角を印刷する範囲 `printViewBox()` いっぱいの四角〈地 #f8fafc・線 #94a3b8／1.5・線は範囲の内側へ線幅の半分〉に置き換え、2 ページ以上ならページの切れ目に `printFrameCuts` の線＝どのページも四辺・v8.34追補）。**非ガントは改ページ計画 `printPagePlan()` に従う**（下記）。**ガントはページ数（縦）指定時だけ `ganttPrintPlan()` に従う**（v8.31・指定なしは v4.30 方式B＝用紙自由） |
 | Excel | `expExcel` | ガント/工程表専用。ExcelJSで真の.xlsx |
 | Markdown | `mindToMarkdown`/`nodeMD` 系 | マインドマップ等のテキスト書き出し |
 | OPML | `mindToOpml`/`generateFromOpml` | 往復（シェイプ種別も `_shape`/`SHAPE_BDM` で保持） |

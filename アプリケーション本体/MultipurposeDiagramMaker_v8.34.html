@@ -15520,7 +15520,9 @@ function laneExportMainExtent(){
 //    ブロックの切れ目でしか起きない。ガント工程表が v8.06追補〜v8.07追補で採った方式の一般化で、
 //    印刷ダイアログで用紙を変えられても破綻しない（何個載るかはブラウザが決めるため）。
 const PAPER_SIZES={A4:[210,297],A3:[297,420],A2:[420,594],A1:[594,841],B4:[257,364],B5:[182,257],letter:[215.9,279.4]};   // mm（縦向き・B系はJIS）   // v8.31追補㉖: A2・A1（ユーザー要望 2026-10-08）
-const PAGE_MARGIN_LR=35, PAGE_MARGIN_TB=20;   // @page margin:10mm 10mm 10mm 25mm（左25＋右10／上下10ずつ）
+const PAGE_MARGIN_LR=20, PAGE_MARGIN_TB=20;   // @page margin:10mm（四辺 10mm＝左右・上下とも 10＋10）
+// v8.34追補: 左の余白 25mm（v7 の綴じ代）をやめ、四辺 10mm に（ユーザー指摘 2026-11-11「左側だけ余白が大きいので、出力の画面が小さく見える」）。
+//   全図種に効く＝倍率 100%（用紙の幅いっぱい）の図は、A4 縦で幅 175→190mm に大きく載る（そのぶん 1 ページに入る図の高さは減る）
 // v8.31追補: 安全代を比率 PAGE_SAFE=0.96（印刷可能な高さの 4%）から固定 2mm に（ユーザー指摘 2026-09-17「もう一行入るほどの余白があるのに
 //   入っていない」）。4% は A4 縦で 11mm・A3 縦で 16mm＝工程表の行（2.8〜5.5mm）1〜2 本ぶんを毎ページ捨てていた。実測（用紙 5 種×行の高さ
 //   3 種×行数 2 通り×縦 2〜4＝42 通り）では安全代 0 でも実 PDF のページ数が計画どおりで、最も詰まった場合の残りは 0.83mm＝ブラウザの
@@ -15712,6 +15714,32 @@ function printViewBox(){
     if(ext!=null){ if(isV()) vbH=ext; else vbW=ext; }
   }
   return {x:vbX,y:vbY,w:vbW,h:vbH};
+}
+// v8.34追補: レーンの無い図（樹状図・フローチャート・マインドマップ・状態遷移図・ER図・UML・シーケンス図）の印刷の地と四辺の線。
+//   従来は画面で描く範囲の四角（#g-lanes の rect＝0,0〜SVG_W,SVG_H・地 #f8fafc・線 #94a3b8）がそのまま印刷に載り、印刷する範囲
+//   （printViewBox＝内容の外接矩形＋余白 p）には左と上の辺だけが入る＝線が左と上にだけ出て外側に白い帯が付き、右と下は地が切れた形で
+//   終わっていた（ユーザー指摘 2026-11-11「印刷のビューは枠がなくて不格好」「4辺に線を入れるのは間違いない」「色はそのままでいい」）。
+//   印刷用の clone の四角を、印刷する範囲いっぱいの四角（地と線の色・太さは画面と同じ）に置き換える。線は範囲の内側に線幅の半分だけ
+//   寄せる＝四辺とも範囲の中に収まり、線から図までの余白は上下左右とも同じ（p から線幅の半分を引いた幅）。画面・PNG・SVG は変えない
+function printFrameNonLane(svg,pv){
+  const g=svg.querySelector('#g-lanes'); if(!g) return;
+  const r0=g.querySelector(':scope > rect'); if(r0) r0.remove();
+  const lw=1.5, h=lw/2;
+  g.insertBefore(e('rect',{x:pv.x+h,y:pv.y+h,width:Math.max(0,pv.w-lw),height:Math.max(0,pv.h-lw),fill:'#f8fafc',stroke:'#94a3b8','stroke-width':lw}),g.firstChild);
+}
+// v8.34追補: 2 ページ以上に分かれるとき、ページの切れ目にも同じ線を引く＝どのページも四辺がそろう（切れ目で枠が開いたままだと、
+//   1 ページ目は下の辺・2 ページ目は上の辺が無い形になる）。c＝このページの切れ目（top／bottom＝横の切れ目の y・left／right＝縦の
+//   切れ目の x・無ければ null）。線は切れ目の内側に線幅の半分だけ寄せる（printFrameNonLane と同じ）。返すのは <line> の文字列
+//   （直列化した SVG の末尾に足す。切れ目はシェイプの無い所なので、上に重なるのは横切る接続線だけ）
+function printFrameCuts(pv,c){
+  const h=0.75, x0=pv.x+h, x1=pv.x+pv.w-h, y0=pv.y+h, y1=pv.y+pv.h-h;
+  const ln=(a,b,p,q)=>'<line x1="'+a+'" y1="'+b+'" x2="'+p+'" y2="'+q+'" stroke="#94a3b8" stroke-width="1.5"/>';
+  let s='';
+  if(c.top!=null) s+=ln(x0,c.top+h,x1,c.top+h);
+  if(c.bottom!=null) s+=ln(x0,c.bottom-h,x1,c.bottom-h);
+  if(c.left!=null) s+=ln(c.left+h,y0,c.left+h,y1);
+  if(c.right!=null) s+=ln(c.right-h,y0,c.right-h,y1);
+  return s;
 }
 // 図面名＋日付＋シェイプ凡例の帯の寸法。expPDF と改ページプレビュー・ガントの計画で共有（v8.16 の算式が基本）。
 // v8.31追補⑦: 日付は帯の右上（凡例の上）に置き、置き場（帯の上端からの距離 titleY／dateY／lgY）もここで決める。凡例と横並びの
@@ -16270,6 +16298,9 @@ async function expPDF(){
   //   ＝画面に出る改ページ線と実際の改ページ位置が必ず一致する。
   const _pv=printViewBox();
   let vbX=_pv.x, vbW=_pv.w, vbY=_pv.y, vbH=_pv.h;
+  const _fr=(S.diagramType!=='gantt'&&!usesLanes());   // v8.34追補: レーンの無い図は印刷する範囲いっぱいに地と四辺の線（ページの切れ目にも線）
+  if(_fr) printFrameNonLane(svg,_pv);
+  const _cutAt=(i,brk,l,r)=>_fr?printFrameCuts(_pv,{top:brk?_pl.blocks[i].top:null,bottom:(i<_pl.blocks.length-1&&_pl.starts.includes(i+1))?_pl.blocks[i].bottom:null,left:l,right:r}):'';
   // v8.27: 非ガントは先に改ページ計画（ページ数指定の倍率・列の計画）を立て、図面名帯は列0の幅で描く（列が1つなら従来どおり全幅）
   const _pl=(S.diagramType==='gantt')?null:printPagePlan(scale);
   if(_pl) scale=_pl.scale;
@@ -16453,7 +16484,7 @@ async function expPDF(){
               '<svg x="0" y="0" width="'+_sh+'" height="'+bh+'" viewBox="'+vbX+' '+b.top+' '+_sh+' '+bh+'">'+_headInner+'</svg>'+
               '<svg x="'+_sh+'" y="0" width="'+vbw+'" height="'+bh+'" viewBox="'+x0+' '+b.top+' '+vbw+' '+bh+'">'+_inner+'</svg></svg>';
           } else {
-            cell='<svg xmlns="'+NS+'" viewBox="'+x0+' '+b.top+' '+vbw+' '+bh+'" style="width:'+_pct(vbw)+'">'+_inner+'</svg>';
+            cell='<svg xmlns="'+NS+'" viewBox="'+x0+' '+b.top+' '+vbw+' '+bh+'" style="width:'+_pct(vbw)+'">'+_inner+_cutAt(i,brk,ci>0?cx0:null,ci<_cs.length-1?cx1:null)+'</svg>';   // v8.34追補: ページの切れ目の線
           }
           // 列の先頭行・改ページ直後の行は pg-rows（-1px の重ね）を付けない＝前ページの末尾に上端 1px の筋が出る
           _rows+='<tr class="pg-blk'+brk+'"><td><div class="'+((i===0||brk)?'pg-svg pg-tile':'pg-svg pg-rows pg-tile')+'">'+cell+'</div></td></tr>';
@@ -16487,7 +16518,8 @@ async function expPDF(){
         const _bot=(i===_pl.blocks.length-1)?(b.bottom+1):b.bottom;
         svg.setAttribute('viewBox',(vbX-1)+' '+b.top+' '+(vbW+2)+' '+Math.max(1,_bot-b.top));
         const brk=(i>0&&_pl.starts.includes(i))?' pg-break':'';   // v8.27: 計画どおりの位置で改ページ＝プレビューと実出力を構造で一致させる
-        _rows+='<tr class="pg-blk'+brk+'"><td><div class="'+(brk?'pg-svg':'pg-svg pg-rows')+'">'+new XMLSerializer().serializeToString(svg)+'</div></td></tr>';   // v8.27: 改ページ直後の行は -1px の重ねを付けない（前ページ末尾に筋が出る）
+        const _cut=_cutAt(i,brk,null,null), _s=new XMLSerializer().serializeToString(svg);   // v8.34追補: ページの切れ目の線を末尾に足す
+        _rows+='<tr class="pg-blk'+brk+'"><td><div class="'+(brk?'pg-svg':'pg-svg pg-rows')+'">'+(_cut?_s.replace(/<\/svg>\s*$/,_cut+'</svg>'):_s)+'</div></td></tr>';   // v8.27: 改ページ直後の行は -1px の重ねを付けない（前ページ末尾に筋が出る）
       });
       bodyInner=_once+'<table class="pgt">'+(_head?('<thead><tr><th>'+_head+'</th></tr></thead>'):'')+'<tbody>'+_rows+'</tbody></table>';
     }
@@ -16504,7 +16536,7 @@ async function expPDF(){
   //   v5.00: <thead>（時間軸＋列見出し）を各ページ先頭で繰り返し。v8.06追補: 本体を行/フェーズ単位の <tr> に分割して
   //   改ページを行境界に落とし、全ページでヘッダーが再描画されるようにした（表題部は pg-once で1ページ目のみ）。
   const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(winTitle)+'</title>'+
-    '<style>@page{'+_pageSize+'margin:10mm 10mm 10mm 25mm;}html,body{margin:0;padding:0;}'+
+    '<style>@page{'+_pageSize+'margin:10mm;}html,body{margin:0;padding:0;}'+   // v8.34追補: 左 25mm をやめて四辺 10mm（PAGE_MARGIN_LR と同じ）
     '.pgt{width:100%;border-collapse:collapse;}'+
     '.pgt thead{display:table-header-group;}'+
     '.pgt th,.pgt td{padding:0;margin:0;}'+
