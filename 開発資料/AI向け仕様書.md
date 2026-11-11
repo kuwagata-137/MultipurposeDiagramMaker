@@ -295,7 +295,8 @@ DIAGRAM_TYPES[key] = {
 - 自己呼出・同一ペア重複エッジを許可（他図種は禁止）。同期/非同期メッセージ（`msgType`）を専用マーカーで描画（`renderSequenceEdges`）。水平メッセージなのでピン・クイック接続の辺指定は対象外。編集ジャンル（グループ化・点線）は非表示。
 
 ### 樹状図（`orgchart`＝旧組織図・`org*` 関数群）
-- ノード: `org_node`（ラベル有）/`org_node_plain`（役職なし）/`org_group`（部門枠）。矢印なし（`noArrow`）。
+- ノード: `org_node`（ラベル有）/`org_node_plain`（役職なし）/`supplement`（補足情報・v8.34追補）/`org_group`（部門枠）。矢印なし（`noArrow`）。
+- 補足情報（v8.34追補）: 重ね置きシェイプ（`isOverlayShape`）のまま。ノードから線でつないだものは `orgTreeLayout` の対象＝葉として子の列に並ぶ・`orgChildrenOf` も子に数える（＋部下追加の置き場所と均等配置）。線の無いものは整列の対象外で、`layoutRecordAttachments`／`layoutFollowOverlays` で整列前に重なっていた（無ければ一番近い）ノードに付いて動く。`replaceTargetAt` は樹状図では補足情報とノードを入れ替えない（ノードの `sections` を守る）。≡（縦積み）は部下（`org_node`）がいる箱だけ。
 - バス型接続線（親から子へ横バス経由・`orgBusRoutes`/`busPos`調整）。ツリー自動レイアウト（`orgTreeLayout`）、部下追加＋ボタン（`orgAddSubordinate`）、部門枠の自動フィット（`orgFitGroups`）、内部テーブル編集（`orgEditTable`）。
 
 ### UMLクラス図（`uml`）

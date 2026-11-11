@@ -88,7 +88,8 @@ Python の例（ほかの言語でも同じ手順です）:
 
   swimlane・bpmn  線のつながりから工程の順を決め、各シェイプを自分のレーンの中に上から並べる（アプリの「整列」と同じ）
   flowchart・statechart・er・uml  線のつながりから段を決めて並べる
-  orgchart        線（上の人→下の人）から木の形に並べる
+  orgchart        線（上の人→下の人）から木の形に並べる。ノードから線でつないだ補足情報（supplement）は、そのノードの子として
+                  次の列（orientation が "horizontal" なら右・"vertical" なら下）に並べる
   mindmap         中心から mindLayout の形に並べる
   sequence        ライフラインを nodes の順に左から、メッセージを edges の順に上から並べる
   gantt           色を書いていないタスクに、所属するフェーズの色を写す（行の並びは nodes の順なので並べ直さない）
@@ -110,7 +111,8 @@ Python の例（ほかの言語でも同じ手順です）:
              gateway_par：並行ゲートウェイ／event：イベント／parallelogram・doc・supplement・crosslane・crosslane_sys_input・group_box
   statechart 状態遷移図: state：状態／state_detail：状態(詳細)／initial：開始（黒丸）／final：終了（二重丸）／diamond：分岐
   er         ER図: entity：エンティティ（テーブル）／er_relation：リレーション（ひし形）
-  orgchart   樹状図（組織図など）: org_node：ノード（役職の見出し付き）／org_node_plain：ノード（1 行）／org_group：グループ
+  orgchart   樹状図（組織図など）: org_node：ノード（役職の見出し付き）／org_node_plain：ノード（1 行）／supplement：補足情報／
+             org_group：グループ
   sequence   シーケンス図: lifeline：ライフライン／activation：活性区間
   gantt      ガントチャート（工程表）: gantt_summary：フェーズ／gantt_task：タスク／gantt_milestone：マイルストーン
   mindmap    マインドマップ: mind_root：中心トピック（1 つだけ）／mind_topic：問題／mind_action：対策／mind_note：補足情報
@@ -128,6 +130,8 @@ Python の例（ほかの言語でも同じ手順です）:
                    [{"text":"役職名","style":"header"},{"style":"table","cols":1,"rows":[["氏名"]]}]
                    （2 列の表にするなら "cols":2 と "rows":[["氏名","山田"],["内線","1234"]]）
   org_node_plain text に 1 行（氏名など）
+  supplement（orgchart）  text に職務などの文（改行は \n）。ノード（from）→補足情報（to）の線でつなぐ。
+                   箇条書きは "textAlign":"left" で左揃え、幅は manualW で決める（例 "manualW":300）
   mind_topic・mind_action・mind_note  次の属性を付けられる:
                    status（"agreed" 合意済／"open" 未決／"objection" 反対あり）、
                    importance（重要度）・confidence（確信度）・effort（工数）はそれぞれ "high"／"mid"／"low"
@@ -1674,8 +1678,8 @@ const DIAGRAM_TYPES={
     name:'樹状図',   // v7.02: 「組織図」から改名（内部キー orgchart は後方互換のため不変）
     useLanes:false,
     defaultLanes:0,
-    palette:['org_node','org_node_plain','org_group'],   // v7.03: 役職なしシェイプを追加
-    palLabels:{org_node:'ノード（ラベル有）',org_node_plain:'ノード',org_group:'グループ'},
+    palette:['org_node','org_node_plain','supplement','org_group'],   // v7.03: 役職なしシェイプを追加／v8.34追補: 補足情報（各課の職務などをノードから線でつないで書く）
+    palLabels:{org_node:'ノード（ラベル有）',org_node_plain:'ノード',supplement:'補足情報',org_group:'グループ'},
     shapeTexts:{org_node:'役職名',org_node_plain:'氏名'},
     noArrow:true,
   },
@@ -5495,6 +5499,9 @@ function replaceTargetAt(x,y,newType){
   if(!tgt||!isReplaceableShape(tgt.type)) return null;
   // v8.09: マインドマップ＝折りたたみ/絞り込みで非表示中のノードは対象外（見えない箱への誤置換を防ぐ）
   if(S.diagramType==='mindmap'&&mindHiddenSet().has(tgt.id)) return null;
+  // v8.34追補: 樹状図の補足情報はノード（org_node）と入れ替えない＝ノードの上に置いた補足情報でノードの中身（sections）が消えないように。
+  //   補足情報はノードの上にそのまま重ねて置かれ、線でつないで使う
+  if(S.diagramType==='orgchart'&&(newType==='supplement'||tgt.type==='supplement')) return null;
   // v7.06: 組織図＝ポジション(2段)↔人名(1段)の入れ替え判定（データ型は共に org_node）
   if(tgt.type==='org_node'&&(newType==='org_node'||newType==='org_node_plain')){
     const isPlain=!tgt.sections||tgt.sections.length===1;
@@ -18491,13 +18498,7 @@ function layoutRecordAttachments(targets){
 }
 // 整列後の後処理＝重ね置きの追従・グループ枠の作り直し・動いた線の手動経路の破棄
 function layoutApplyAttachments(rec){
-  const moved=new Set();
-  S.nodes.forEach(n=>{ const p=rec.pos[n.id]; if(p&&(n.x!==p.x||n.y!==p.y)) moved.add(n.id); });
-  rec.overlays.forEach(({o,t,dx,dy})=>{
-    if(!moved.has(t.id))return;
-    o.x=t.x+dx; o.y=t.y+dy; moved.add(o.id);
-    if(usesLanes()&&!isFreeShape(o.type)){ const l=laneAt(isV()?o.x+o.w/2:o.y+o.h/2); if(l&&l!==VIRTUAL_LANE) o.lid=l.id; }
-  });
+  const moved=layoutFollowOverlays(rec);
   // グループ枠は内側（面積の小さい枠）から順に＝入れ子の外枠は作り直した内枠の矩形を含めて囲う
   rec.groups.sort((a,b)=>a.g.w*a.g.h-b.g.w*b.g.h).forEach(({g,ids})=>{
     if(!ids.some(id=>moved.has(id)))return;   // 中身が動いていない枠は不変
@@ -18511,6 +18512,18 @@ function layoutApplyAttachments(rec){
     moved.add(g.id);
   });
   S.edges.forEach(ed=>{ if(moved.has(ed.from)||moved.has(ed.to)){ delete ed.waypoints; delete ed.orthoWps; delete ed.midPos; } });
+}
+// 整列で動いたシェイプの id を集め、重ね置き（書類・データ・補足情報）を控えた相手と同じだけ動かす。動いたものの id 集合を返す
+//   v8.34追補: layoutApplyAttachments から切り出し＝樹状図の整列（orgTreeLayout）も、線でつないでいない補足情報を近くのノードに付いて動かす
+function layoutFollowOverlays(rec){
+  const moved=new Set();
+  S.nodes.forEach(n=>{ const p=rec.pos[n.id]; if(p&&(n.x!==p.x||n.y!==p.y)) moved.add(n.id); });
+  rec.overlays.forEach(({o,t,dx,dy})=>{
+    if(!moved.has(t.id))return;
+    o.x=t.x+dx; o.y=t.y+dy; moved.add(o.id);
+    if(usesLanes()&&!isFreeShape(o.type)){ const l=laneAt(isV()?o.x+o.w/2:o.y+o.h/2); if(l&&l!==VIRTUAL_LANE) o.lid=l.id; }
+  });
+  return moved;
 }
 // レーン無しの図種の段組み（従来方式）: 入線の無いノードを根に BFS で段を決め、段ごとに中央寄せで横一列。
 //   v8.28: フローチャート（レーン系3図種のレーン無し版）は行の中心をガイド線に乗せる＝スイムレーンと同じ見え方
@@ -18667,8 +18680,12 @@ const ORG_GAP_CROSS=36;   // 兄弟間（交差軸）の間隔
 const ORG_STACK_INDENT=18;// v7.02: 縦積みリストのインデント（親の左端→子の左端）
 const ORG_STACK_GAP=12;   // v7.02: 縦積みリストの行間
 function orgTreeLayout(){
-  const targets=S.nodes.filter(n=>!isCrosslaneType(n.type)&&n.type!=='org_group');
+  // v8.34追補: 補足情報（重ね置き）は線でつないだものだけを木に入れる＝ノードからつないだ補足情報は葉として子の列に並ぶ。
+  //   線の無い補足情報は「ツリーに入らないノード」として最下段（最右列）へ集めず、整列の前に重なっていた（無ければ一番近い）ノードに付いて動く
+  const linked=new Set(); S.edges.forEach(ed=>{ linked.add(ed.from); linked.add(ed.to); });
+  const targets=S.nodes.filter(n=>!isCrosslaneType(n.type)&&n.type!=='org_group'&&(!isOverlayShape(n.type)||linked.has(n.id)));
   if(!targets.length)return;
+  const rec=layoutRecordAttachments(targets);
   const byId={}; targets.forEach(n=>byId[n.id]=n);
   const childMap={}, hasIncoming=new Set();
   targets.forEach(n=>childMap[n.id]=[]);
@@ -18776,6 +18793,7 @@ function orgTreeLayout(){
       rp+=crossSz(n)+ORG_GAP_CROSS;
     });
   }
+  layoutFollowOverlays(rec);
   snap();render();
 }
 
@@ -18784,11 +18802,13 @@ function orgTreeLayout(){
 //   ②箱を重ねてドロップで親子付け替え（配下サブツリーごと新しい親の末尾へ移動）
 //   ③兄弟の並び順＝交差軸の位置がそのまま順序（ドラッグで追い越し→整列・自動配置に反映）
 //   自動配置は「追加・付け替えされた箱だけ」＝全体は再整列しない（手でずらした配置は⊞まで維持）。
-// 指定ノードの子（org_node のみ・エッジ from→to）
+// 指定ノードの子（org_node と補足情報・エッジ from→to）
+//   v8.34追補: 線でつないだ補足情報も子に数える＝＋部下追加の置き場所が補足情報の隣になり、部下の追加・付け替えの後の均等配置でも
+//   補足情報が一緒に並ぶ（数えないと、補足情報のある課に部下を足すと、部下が補足情報に重なって置かれる）
 function orgChildrenOf(pid){
   return S.edges.filter(ed=>ed.from===pid)
     .map(ed=>S.nodes.find(n=>n.id===ed.to))
-    .filter(n=>n&&n.type==='org_node');
+    .filter(n=>n&&(n.type==='org_node'||n.type==='supplement'));
 }
 // 指定ノード以下のサブツリーの id 集合（自分を含む・循環ガード・org_group は対象外）
 function orgSubtreeIds(rootId){
@@ -18935,7 +18955,7 @@ function renderOrgAddButton(){
   const pos=i=>side?{x:n.x+n.w+16,y:n.y+n.h/2+i*26}:{x:n.x+n.w/2+i*26,y:n.y+n.h+16};
   let i=0;
   const p0=pos(i++); mkBtn(p0.x,p0.y,'＋','#2563eb','部下を追加',()=>orgAddSubordinate(n.id));
-  if(orgChildrenOf(n.id).length){
+  if(orgChildrenOf(n.id).some(c=>c.type==='org_node')){   // v8.34追補: 補足情報だけの課には出さない（縦積みは部下のリスト用）
     const p1=pos(i++);
     mkBtn(p1.x,p1.y,'≡',n.orgStack?'#16a34a':'#94a3b8',n.orgStack?'縦積みリストを解除（クリックで通常ツリーに戻す）':'配下を縦積みリストにする',()=>orgToggleStack(n.id));
   }
