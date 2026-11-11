@@ -62,6 +62,13 @@
   A4 縦で幅 175→190mm に大きく載る）。スイムレーン図・ガントの印刷 HTML は余白の指定のほかは一字も変わらない。PNG・SVG は変えていない（画面の描く範囲全体を
   写すので四辺とも出ている）。検証: Puppeteer ヘッドレスで印刷用ページを PDF にし PyMuPDF で画像化（樹状図 横・縦・A4 縦横・倍率 250% の 3 列・マインドマップ・
   フローチャート・スイムレーン図・ガント）。画像 `screenshots/v834_print/*_before_*.png`／`*_after_*.png`
+- **v8.34追補: 印刷の帯の日付の ON/OFF と、図の名称・日付の文字サイズ（2026-11-12・版番据置）**（ユーザー依頼「印刷時に右上に印字される
+  日付をON/OFF」「文字の大きさを調整」・対象は図の名称と日付・単位と置き場所は見本と AskUserQuestion で決定＝質問 P1 pt・P2 用紙の行の右。
+  ブランチ `feature/v8.34-print-band-text`）: メニューバー「出力」の「用紙」の行の右に「日付を印刷」（`S.printDate`）と「文字サイズ 図の名称／日付」
+  （`S.printNamePt`／`S.printDatePt`＝pt・6〜72・空欄＝従来の自動）。pt は用紙の上の大きさ＝倍率・ページ数・図の幅に関係なく同じ
+  （`printBandMetrics` の 4 つ目の引数 `printBandUnit`＝SVG の 1 単位の mm）。保存・指紋に入る。見出し欄を出している工程表は無効（見出し欄の
+  「作成日を表示」を使う）。PNG・SVG は変えない。欄を使わない印刷は修正前と一字一句同じ。検証: Puppeteer 30 項目（PDF の文字サイズを PyMuPDF で
+  測って 16.0pt・10.0pt）。画像 `screenshots/v834_print_band_ui.png`・`screenshots/v834_q/`。未対応: 操作マニュアル
 - 旧: `アプリケーション本体/MultipurposeDiagramMaker_v8.33.html`（2026-10-23／ガント工程表の修正 6 件＝凡例の自動作成・凡例の色の選び方・週と月の「土日・休工日」・
   情報欄の行の追加・情報欄を帯型に・タスク名の項目名。ユーザー依頼＋版アップの指示・仕様はモック 6 種（`screenshots/v833_mock_*.png`）と
   AskUserQuestion で決定。ブランチ `feature/v8.33-gantt-legend-infocols`）
