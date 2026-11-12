@@ -657,6 +657,7 @@ render():
 | `S.printFitTall` / `S.printFitWide` / `#print-fit-tall` / `#print-fit-wide` / `#pdf-scale-eff` / `printFitNorm` / `printFitSpec` | ページ数指定の状態・入力欄・読み出し欄・正規化・指定の有無（保存・指紋に含む） |
 | `onPrintFitChange` / `syncPrintFitUI` / `printFitEffectiveScale`（v8.31） | 入力→状態→倍率欄の排他（Excel と同じ）・「→ nn%」の読み出し |
 | `S.printDate` / `S.printNamePt` / `S.printDatePt` / `#print-date` / `#print-name-pt` / `#print-date-pt` / `#print-band-set`（v8.34追補） | 印刷の帯（1 ページ目の上の白い帯）の日付の ON/OFF と、図の名称・日付の文字サイズ（pt・6〜72・0.5 刻み・空欄＝従来の自動）。「用紙」の行の右（メニューバーの高さを変えない）。保存・指紋に含む・新規作成では据え置き（用紙と同じ） |
+| `printPlanTailEmpty(p)`（v8.34追補・計画外） | 計画の最後の行（'y'）・最後の列（'x'）にシェイプ・接続線のラベル・接続線（`#g-edges path` の外接矩形）が 1 つも無いか。`printPagePlan` はページ数指定なしでこれが真なら倍率を 1% ずつ下げて立て直し、理由を `autoNote` に（倍率の欄は書き換えない）。レーン境界でしか切らない向き（`pageUseLaneBoundaries`）は対象外 |
 | `onPrintBandChange` / `syncPrintBandUI` / `printPtNorm` / `printBandUnit(fullW,scale)` / `printBandKey` / `PT_MM` | 欄→状態（入力中の欄は書き換えない）・状態→欄（見出し欄を出している工程表は帯を印刷しないので無効）・pt の正規化・SVG の 1 単位の mm（用紙の内容幅×倍率÷viewBox の幅。ガント以外は図の幅＋2＝左右 1px の拡張）・倍率探索のメモ化の鍵 |
 | `printFitScale` / `printFitSearch`（v8.31 に切り出し） / `_printFitCache` / `printGeomKey` | ページ数から倍率を決める走査（解析上限から 5% ずつ下げ→1% 刻み・二分探索しない）とメモ化 |
 | `printPlanAt(pv,headPx,sideHead,name,W,scale)` / `printRepeatSidePx` | 倍率 scale のときの行＋列の計画（列＝`pageBlocks(...,'x')`・横レーンの 2 列目以降は見出し列ぶん狭い） |

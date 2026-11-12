@@ -15917,8 +15917,43 @@ function printPagePlan(userScale){
     if(as.scale<userScale&&(S.printNamePt||S.printDatePt)){   // v8.34追補: pt 指定の帯は倍率を下げると SVG の上で高くなる＝下げた倍率の帯の高さでもう一度見積もる
       const as2=printAutoScale(pv.w,userScale,headPx,printBandMetrics(W,pv.w,name,printBandUnit(pv.w+2,as.scale)).bandH2); if(as2.scale<as.scale) as=as2; }
     scale=as.scale; autoNote=as.note; }
-  const p=printPlanAt(pv,headPx,sideHead,name,W,scale);
+  let p=printPlanAt(pv,headPx,sideHead,name,W,scale);
+  // v8.34追補: 最後のページが図の余白だけ（シェイプ・接続線・ラベルが 1 つも無い）なら、倍率を 1% ずつ下げて 1 つ前のページに収める
+  //   （ユーザー決定 2026-11-12 質問 P3＝案A）。原因は pageBlocks が最後の切れ端を中身を見ずに 1 ブロックにすること（v8.22 から）。
+  //   図の名称の帯＋図の高さが 1 ページを超えた量が「下の余白−PAGE_GAP_PAD」より小さいと、余白だけのページが出ていた。
+  //   ページ数を指定したとき（fit）は対象外。倍率の欄の数は書き換えず、理由を autoNote（expPDF のヒント）で伝える。
+  //   余白だけのページが出ない図は、計画も倍率も変わらない。
+  if(!fit&&printPlanTailEmpty(p)){
+    let s=scale, q=p;
+    while(s>10&&printPlanTailEmpty(q)){ s--; q=printPlanAt(pv,headPx,sideHead,name,W,s); }
+    if(!printPlanTailEmpty(q)){
+      const why=printPlanTailEmpty(p)==='x'?'図の右の余白だけが次のページに出るため':'図の下の余白だけが次のページに出るため';
+      p=q; scale=s; autoNote='倍率を'+userScale+'%→'+s+'%に自動調整しました（'+why+'）';
+    }
+  }
   return Object.assign({pv,W,headPx,sideHead,scale,autoNote,fitNote,fit},p);
+}
+// v8.34追補: 計画の最後の行（ページ）・最後の列が図の余白だけか。'y'＝最後の行・'x'＝最後の列・false＝どちらも中身がある。
+//   レーン境界でしか切らない向き（pageUseLaneBoundaries）は最後のページが必ずレーン 1 本ぶん＝対象外。
+//   中身＝シェイプ（縦棒・帯・グループ枠を含む）・接続線のラベル・接続線（画面に描いた線の外接矩形。迂回で図の下を回る線がある）。
+function printPlanTailEmpty(p){
+  const lastTop=(ax)=>{
+    const bl=(ax==='y')?p.blocks:p.cols.blocks, st=(ax==='y')?p.starts:p.cols.starts;
+    if(st.length<2||pageUseLaneBoundaries(ax)) return null;
+    return bl[st[st.length-1]].top;
+  };
+  const anyBeyond=(ax,t)=>{
+    const lo=(ax==='y')?(n=>n.y+n.h):(n=>n.x+n.w);
+    if(S.nodes.some(n=>n.x!=null&&n.y!=null&&lo(n)>t)) return true;
+    for(const k in _edgeLabelGeom){ const g=_edgeLabelGeom[k]; if(g&&((ax==='y')?(g.my+(g.h||0)/2):(g.mx+(g.w||0)/2))>t) return true; }
+    for(const el of document.querySelectorAll('#g-edges path')){
+      let b; try{ b=el.getBBox(); }catch(_){ continue; }
+      if(b&&(b.width>0||b.height>0)&&((ax==='y')?(b.y+b.height):(b.x+b.width))>t) return true;
+    }
+    return false;
+  };
+  for(const ax of ['y','x']){ const t=lastTop(ax); if(t!=null&&!anyBeyond(ax,t)) return ax; }
+  return false;
 }
 // ════════════════════════════════════════════════════════════════════════════
 //  v8.31: ガント工程表のページ数指定（縦○ページだけ・横は常に 1 ページ幅・縮小のみ）
