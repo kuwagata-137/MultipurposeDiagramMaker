@@ -90,6 +90,7 @@ let S = {
   mindBranch:'curve',   // マインドマップの枝線の形
   mindReserve:[],       // マインドマップのリザーブ領域（未配置トピック・v8.11追補）
   printPaper:'A4', printOrient:'portrait',  // 印刷用紙・向き（v8.22。改ページ計算に使う・保存対象）
+  printDate:true, printNamePt:null, printDatePt:null,  // 印刷の帯の日付を出すか・図の名称と日付の文字サイズ（pt・null＝自動）（v8.34追補・保存対象）
   pbPreview:false       // 改ページプレビュー表示（画面のみ・保存対象外）
 };
 ```
@@ -117,7 +118,7 @@ let S = {
   note, noteAlign,   // note/sys_input_desc/state_detail の補足本文と揃え（量に応じ自動リサイズ）
   sections,          // ER/UML/組織ノードの区画（複数行の内部テーブル）。sections[i].align で区画ごとの揃え
   textAlign,         // 'left'|'center'|'right'
-  fontSize,          // 文字サイズpx（v8.14。既定は defaultFontSize(n)＝通常12・グループ枠16。既定値ならキー削除。説明有シェイプでは名称の欄）
+  fontSize,          // 文字サイズpx（v8.14。既定は defaultFontSize(n)＝通常12・グループ枠16。既定値ならキー削除。説明有シェイプでは名称の欄。樹状図の org_node は見出し＝この値・表のセルと 1 行のノード＝この値−1＝orgSecFont・v8.34追補）
   noteFontSize,      // 説明有シェイプの説明欄の文字サイズpx（v8.29。既定 NOTE_FONT=10・既定値ならキー削除。noteFontSize(n) で読む）
   manualW, manualH,  // 手動リサイズ済みの印（v8.10）。付いていると autoFitNodeSize が下限扱い＝縮めない・文字は fitNodeFontSize で縮小
   dashed,            // true のみ保持＝点線（v8.18。枠線 stroke-dasharray を継承で内部仕切り線まで波及）
@@ -297,6 +298,7 @@ DIAGRAM_TYPES[key] = {
 ### 樹状図（`orgchart`＝旧組織図・`org*` 関数群）
 - ノード: `org_node`（ラベル有）/`org_node_plain`（役職なし）/`supplement`（補足情報・v8.34追補）/`org_group`（部門枠）。矢印なし（`noArrow`）。
 - 補足情報（v8.34追補）: 重ね置きシェイプ（`isOverlayShape`）のまま。ノードから線でつないだものは `orgTreeLayout` の対象＝葉として子の列に並ぶ・`orgChildrenOf` も子に数える（＋部下追加の置き場所と均等配置）。線の無いものは整列の対象外で、`layoutRecordAttachments`／`layoutFollowOverlays` で整列前に重なっていた（無ければ一番近い）ノードに付いて動く。`replaceTargetAt` は樹状図では補足情報とノードを入れ替えない（ノードの `sections` を守る）。≡（縦積み）は部下（`org_node`）がいる箱だけ。
+- 文字サイズ（v8.34追補）: 区画の文字は `orgSecFont(n,sec)`＝文字サイズ欄の値（既定 12）との差だけ、見出し（12）と表のセル・1 行のノード（11）を大きく・小さくする。段の高さは `orgGrow(n)`（大きくしたぶん・小さくしても 0）だけ広げる（`calcSectionsH`／`sectionOffsets`／`sectionSize` の 3 つ目の引数）。幅は `orgFitW(n)` で、いちばん長い見出し・セルが収まるまで広げる（広げるだけ。render が区画の大きさを決める所で呼ぶ）。ER・UML の区画は固定のまま（`orgFontDelta` は org_node 以外 0）。
 - バス型接続線（親から子へ横バス経由・`orgBusRoutes`/`busPos`調整）。ツリー自動レイアウト（`orgTreeLayout`）、部下追加＋ボタン（`orgAddSubordinate`）、部門枠の自動フィット（`orgFitGroups`）、内部テーブル編集（`orgEditTable`）。
 
 ### UMLクラス図（`uml`）
@@ -320,7 +322,7 @@ DIAGRAM_TYPES[key] = {
 
 ### 保存（`saveHtmlCore(name)`・12046行〜）
 1. 現在の `document.documentElement.outerHTML` を取得（＝アプリ本体そのもの）。
-2. 状態オブジェクト `st = {diagramType,orientation,lanes,nodes,edges,uid,diagramName,gantt,mindLayout,gridOn,style,stepNums,docId,mindBranch,mindReserve,printPaper,printOrient,appVer:APP_VER}` をJSON化。
+2. 状態オブジェクト `st = {diagramType,orientation,lanes,nodes,edges,uid,diagramName,gantt,mindLayout,gridOn,style,stepNums,docId,mindBranch,mindReserve,printPaper,printOrient,printFitTall,printFitWide,printDate,printNamePt,printDatePt,appVer:APP_VER}` をJSON化。
 3. 既存の状態埋め込みscriptを除去し、`</head>` の直前に `<script id="swimlane-state">window.__SWIMLANE_STATE__={...};</script>` を注入。
    v8.33追補から、除去は DOM（`querySelectorAll('script#__state__,script#swimlane-state')` を remove）で、注入は `document.head.outerHTML` の末尾（本物の閉じタグ）の直前に行う。文字列の置き換えで探すと、`<head>` 先頭の「AI作図の手引き」（コメント）の中の同じ文字に当たり、図のデータがコメントの中に入ってしまうため。
 4. `<filename>.html` としてダウンロード（`dl()`・File System Access API の `showSaveFilePicker` があれば `id:'bdm-save'`＋`startIn` で同じ場所へ）。→ **アプリ＋データが1ファイルに同梱された自己完結HTML**。
@@ -655,6 +657,9 @@ render():
 |---|---|
 | `S.printFitTall` / `S.printFitWide` / `#print-fit-tall` / `#print-fit-wide` / `#pdf-scale-eff` / `printFitNorm` / `printFitSpec` | ページ数指定の状態・入力欄・読み出し欄・正規化・指定の有無（保存・指紋に含む） |
 | `onPrintFitChange` / `syncPrintFitUI` / `printFitEffectiveScale`（v8.31） | 入力→状態→倍率欄の排他（Excel と同じ）・「→ nn%」の読み出し |
+| `S.printDate` / `S.printNamePt` / `S.printDatePt` / `#print-date` / `#print-name-pt` / `#print-date-pt` / `#print-band-set`（v8.34追補） | 印刷の帯（1 ページ目の上の白い帯）の日付の ON/OFF と、図の名称・日付の文字サイズ（pt・6〜72・0.5 刻み・空欄＝従来の自動）。「用紙」の行の右（メニューバーの高さを変えない）。保存・指紋に含む・新規作成では据え置き（用紙と同じ） |
+| `printPlanTailEmpty(p)`（v8.34追補・計画外） | 計画の最後の行（'y'）・最後の列（'x'）にシェイプ・接続線のラベル・接続線（`#g-edges path` の外接矩形）が 1 つも無いか。`printPagePlan` はページ数指定なしでこれが真なら倍率を 1% ずつ下げて立て直し、理由を `autoNote` に（倍率の欄は書き換えない）。レーン境界でしか切らない向き（`pageUseLaneBoundaries`）は対象外 |
+| `onPrintBandChange` / `syncPrintBandUI` / `printPtNorm` / `printBandUnit(fullW,scale)` / `printBandKey` / `PT_MM` | 欄→状態（入力中の欄は書き換えない）・状態→欄（見出し欄を出している工程表は帯を印刷しないので無効）・pt の正規化・SVG の 1 単位の mm（用紙の内容幅×倍率÷viewBox の幅。ガント以外は図の幅＋2＝左右 1px の拡張）・倍率探索のメモ化の鍵 |
 | `printFitScale` / `printFitSearch`（v8.31 に切り出し） / `_printFitCache` / `printGeomKey` | ページ数から倍率を決める走査（解析上限から 5% ずつ下げ→1% 刻み・二分探索しない）とメモ化 |
 | `printPlanAt(pv,headPx,sideHead,name,W,scale)` / `printRepeatSidePx` | 倍率 scale のときの行＋列の計画（列＝`pageBlocks(...,'x')`・横レーンの 2 列目以降は見出し列ぶん狭い） |
 | `expPDF` の `_cols>1` 分岐 / `.pg-col` / `.pg-colbrk` / `.pg-tile` / `.pg-break` | 列ごとの `<table>`・2 列目以降で改ページ・左寄せタイル・計画どおりの行で改ページ |
@@ -713,7 +718,7 @@ render():
 | `migrateLegacyEdgeRouting(savedVer)` | `appVer` を持たない v8.13 以前のファイルだけ 5 フィールドを落とす（v8.31追補⑤で v8.16 の規則に戻した・v8.26 の「版が違えば全部落とす」は撤回） |
 | `manualRouteFitsSides(ed,exitSide,entrySide)` | 手で直した直交経路（`orthoWps`）がその出入りの辺の組で描けるか（端の区間は辺と直角＝曲がり角どうしの区間が水平なら上下の辺・垂直なら左右の辺／曲がり角 1 つは L 字）。`allocatePorts` 1st pass の L 字の規則は描けない組を選ばない（v8.31追補⑤: v8.28 で○＋の線も L 字の対象にしたため、v8.27 以前に Z 字へ直した線をインポートすると手動経路が捨てられていた） |
 | `expPDF` の `_pageSize` | `@page{size:<幅>mm <高さ>mm}`（`printPaperMm()`）＝非ガントは常に・ガントはページ数指定のときだけ。v8.31追補⑥で追補③の撤去を撤回（ユーザー決定: 送信先は「PDFに保存」。PDF24 などプリンター経由で縦になるのは了承済み）。案内文（`.hint`・`hint()`）も「PDFに保存」を選ぶよう伝える |
-| `printBandMetrics(W,vbW,name)` の置き場 | 日付は帯の右上（v8.31追補⑦）: 凡例と横並び＝右の列の上に日付の行（上 6＋文字＋下 4）・その下に凡例・`bandH2=max(bandH, 日付の行＋凡例＋6)`・図面名は縦中央・日付の右端＝凡例の右端（−8）。凡例なし・下段積み＝図面名と同じ行の右端（従来）。図面名が長く同じ行に入らないときだけ日付を最上段に 1 行（`dateOwnRow`）。ガントの表題部の上端 `onceTop` も `bandH2` |
+| `printBandMetrics(W,vbW,name)` の置き場 | 日付は帯の右上（v8.31追補⑦）: 凡例と横並び＝右の列の上に日付の行（上 6＋文字＋下 4）・その下に凡例・`bandH2=max(bandH, 日付の行＋凡例＋6)`・図面名は縦中央・日付の右端＝凡例の右端（−8）。凡例なし・下段積み＝図面名と同じ行の右端（従来）。図面名が長く同じ行に入らないときだけ日付を最上段に 1 行（`dateOwnRow`）。ガントの表題部の上端 `onceTop` も `bandH2`。v8.34追補: 4 つ目の引数 `u`（`printBandUnit`＝SVG の 1 単位の mm）で `S.printNamePt`／`S.printDatePt` を SVG の単位へ（pt×`PT_MM`÷u）＝倍率・ページ数・図の幅に関係なく用紙の上で指定の大きさ。空欄は従来の自動（図の名称＝W×2% を 24〜48・日付＝その 0.45 倍）。`S.printDate===false` は日付の幅と行を数えない（凡例と横並びなら凡例を上下中央）・図の名称も日付も凡例も無ければ帯の高さ 0。日付が図の名称と同じ行で図の名称より大きいときは行の高さ＝日付の行。呼び出し 5 か所（`printPlanAt`・`printFitScale`＝上限は倍率 1000% の帯で見積もる・`printPagePlan`＝自動縮小は下げた倍率の帯でもう一度・`ganttPrintPlanAt`・`expPDF` のガント）。PNG・SVG（`buildExportSvg`）は使わない＝変わらない |
 | `ganttPrintGeomKey` / `printFitScale` の鍵・`onDiagramNameInput` | 倍率のメモ化の鍵に図面名と日付を含める（帯の高さが図面名・日付の幅で変わる）。図面名の入力で改ページ位置のプレビュー（`S.pbPreview`）かページ数指定があれば `renderPageBreaks`＋`syncPrintFitUI`（v8.31追補⑦） |
 
 ### v8.30（スペース調整・判断(説明有)・帯どうしの置換・ポップの位置）

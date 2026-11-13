@@ -1093,6 +1093,23 @@ https://github.com/nodeca/pako/blob/main/LICENSE
                 style="font-size:11px;padding:2px 3px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#1e293b">
           <option value="portrait">縦</option><option value="landscape">横</option>
         </select>
+        <!-- v8.34追補: 印刷の帯（1 ページ目の上の白い帯）の日付の ON/OFF と、図の名称・日付の文字サイズ（pt＝用紙の上の大きさ。空欄＝従来の自動）。
+             置き場所は「用紙」の行の右＝メニューバーの高さを変えない（ユーザー決定 2026-11-12 質問 P2）。単位は pt（同 質問 P1） -->
+        <span id="print-band-set" style="display:flex;align-items:center;gap:4px;margin-left:8px;padding-left:8px;border-left:1px solid #e2e8f0">
+          <label class="rlabel" style="display:flex;align-items:center;gap:3px;color:#334155;cursor:pointer" title="印刷の 1 ページ目の上の帯の右上に、印刷した日の日付を出す（チェックを外すと出さない）">
+            <input id="print-date" type="checkbox" checked onchange="onPrintBandChange()" style="margin:0">日付を印刷</label>
+          <span class="rlabel" style="margin-left:6px" title="印刷の 1 ページ目の上の帯の文字サイズ（pt＝用紙の上の大きさ）。空欄はアプリが図の幅から自動で決める">文字サイズ</span>
+          <span class="rlabel">図の名称</span>
+          <input id="print-name-pt" type="number" min="6" max="72" step="0.5" placeholder="自動" oninput="onPrintBandChange()"
+                 title="印刷の帯の図の名称の文字サイズ（pt・6〜72）。空欄＝自動（図の幅から決める）。倍率やページ数で図を縮めても、この大きさで印刷します"
+                 style="width:50px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#1e293b"/>
+          <span class="rlabel">pt</span>
+          <span class="rlabel" style="margin-left:4px">日付</span>
+          <input id="print-date-pt" type="number" min="6" max="72" step="0.5" placeholder="自動" oninput="onPrintBandChange()"
+                 title="印刷の帯の日付の文字サイズ（pt・6〜72）。空欄＝自動（図の名称の自動の大きさの 0.45 倍）"
+                 style="width:50px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#1e293b"/>
+          <span class="rlabel">pt</span>
+        </span>
       </div>
       <!-- v8.27: 印刷のページ数指定（Excel の「次のページ数に合わせて印刷」と同じ考え方）。
            片方だけならもう一方は成り行き。入力中は倍率欄を使わず、計算した倍率を倍率欄の右に読み出す。
@@ -1933,7 +1950,7 @@ function renderFlowControls(){
 }
 function toggleStepNums(){ S.stepNums=!S.stepNums; snap(); render(); hint(S.stepNums?'ステップ番号を表示しました（配置順で自動採番）':'ステップ番号を非表示にしました'); }
 
-let S={diagramType:'swimlane',orientation:'vertical',lanes:[],nodes:[],edges:[],sel:[],mode:'select',conn:null,drag:null,hist:[],hi:-1,uid:0,gantt:defaultGantt(),mindLayout:'radial',gridOn:true,style:'standard',stepNums:false,docId:null,mindBranch:'curve',mindReserve:[],printPaper:'A4',printOrient:'portrait',printFitTall:null,printFitWide:null,pbPreview:false};   // v8.22: printPaper/printOrient=改ページ計算に使う用紙（保存対象）／pbPreview=改ページプレビュー表示（画面のみ）   // v8.11追補: mindReserve=マインドマップのリザーブ領域（未配置のトピック）   // v7.00: gridOn=方眼グリッド / v8.01: style=デザインテンプレート, stepNums=番号バッジ表示
+let S={diagramType:'swimlane',orientation:'vertical',lanes:[],nodes:[],edges:[],sel:[],mode:'select',conn:null,drag:null,hist:[],hi:-1,uid:0,gantt:defaultGantt(),mindLayout:'radial',gridOn:true,style:'standard',stepNums:false,docId:null,mindBranch:'curve',mindReserve:[],printPaper:'A4',printOrient:'portrait',printFitTall:null,printFitWide:null,printDate:true,printNamePt:null,printDatePt:null,pbPreview:false};   // v8.34追補: printDate=印刷の帯に日付を出すか／printNamePt・printDatePt=帯の図の名称・日付の文字サイズ（pt・null＝自動）（保存対象）   // v8.22: printPaper/printOrient=改ページ計算に使う用紙（保存対象）／pbPreview=改ページプレビュー表示（画面のみ）   // v8.11追補: mindReserve=マインドマップのリザーブ領域（未配置のトピック）   // v7.00: gridOn=方眼グリッド / v8.01: style=デザインテンプレート, stepNums=番号バッジ表示
 // ガントチャート時間軸モデルの初期値
 //   v4.01: 開始日の既定を「当月初日」に、概要(descW)/担当者(assigneeW)列幅を追加
 function ganttFirstOfThisMonth(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';}
@@ -2084,13 +2101,14 @@ function toLogicalSize(w,h){return isV()?{mainLen:h,crossLen:w}:{mainLen:w,cross
 function toPhysicalSize(mainLen,crossLen){return isV()?{w:crossLen,h:mainLen}:{w:mainLen,h:crossLen}}
 
 // ── 多セクションノード機構 ──
-function calcSectionsH(sections,org){
+// v8.34追補: grow＝樹状図のノードの文字を大きくしたぶん、見出し段と表の 1 行を広げる量（orgGrow・ER/UML は 0）
+function calcSectionsH(sections,org,grow=0){
   if(!sections||!sections.length)return 0;
   let h=0;
   sections.forEach(s=>{
-    if(s.style==='header') h+=org?ORG_HDR_H:SECT_HDR_H;   // v7.03: 樹状図はコンパクトな専用高さ
+    if(s.style==='header') h+=org?ORG_HDR_H+grow:SECT_HDR_H;   // v7.03: 樹状図はコンパクトな専用高さ
     else if(s.style==='sub') h+=SECT_HDR_H-4;
-    else if(s.style==='table') h+=Math.max(1,(s.rows||[]).length)*ORG_ROW_H;   // v7.02 ミニ表 / v7.03 行高22
+    else if(s.style==='table') h+=Math.max(1,(s.rows||[]).length)*(ORG_ROW_H+grow);   // v7.02 ミニ表 / v7.03 行高22
     else if(s.rows) h+=Math.max(1,s.rows.length)*SECT_ROW_H+SECT_PAD*2;
   });
   return h;
@@ -2099,21 +2117,50 @@ function sectionOffsets(n){
   const offsets=[];
   let pos=tV()?n.y:n.x;   // v7.00: 組織図は横向きでもセクションを縦積み（tV）
   const org=n.type==='org_node';   // v7.03: 樹状図専用高さ
+  const grow=orgGrow(n);
   (n.sections||[]).forEach(s=>{
     offsets.push(pos);
-    if(s.style==='header') pos+=org?ORG_HDR_H:SECT_HDR_H;
+    if(s.style==='header') pos+=org?ORG_HDR_H+grow:SECT_HDR_H;
     else if(s.style==='sub') pos+=SECT_HDR_H-4;
-    else if(s.style==='table') pos+=Math.max(1,(s.rows||[]).length)*ORG_ROW_H;   // v7.02 ミニ表 / v7.03 行高22
+    else if(s.style==='table') pos+=Math.max(1,(s.rows||[]).length)*(ORG_ROW_H+grow);   // v7.02 ミニ表 / v7.03 行高22
     else if(s.rows) pos+=Math.max(1,s.rows.length)*SECT_ROW_H+SECT_PAD*2;
   });
   return offsets;
 }
-function sectionSize(sec,org){
-  if(sec.style==='header') return org?ORG_HDR_H:SECT_HDR_H;   // v7.03: 樹状図専用高さ
+function sectionSize(sec,org,grow=0){
+  if(sec.style==='header') return org?ORG_HDR_H+grow:SECT_HDR_H;   // v7.03: 樹状図専用高さ
   if(sec.style==='sub') return SECT_HDR_H-4;
-  if(sec.style==='table') return Math.max(1,(sec.rows||[]).length)*ORG_ROW_H;   // v7.02 ミニ表 / v7.03 行高22
+  if(sec.style==='table') return Math.max(1,(sec.rows||[]).length)*(ORG_ROW_H+grow);   // v7.02 ミニ表 / v7.03 行高22
   if(sec.rows) return Math.max(1,sec.rows.length)*SECT_ROW_H+SECT_PAD*2;
   return SECT_HDR_H;
+}
+// v8.34追補: 樹状図のノード（org_node）の文字サイズ（ユーザー報告 2026-11-13「2行以上もしくは2列以上あるシェイプの文字の大きさが
+//   変更できない」）。区画の文字を 12（見出し）／11（表のセル・1 行のノード）の固定で描き、文字サイズ欄の値 n.fontSize を読んで
+//   いなかった（v8.14 で文字サイズ欄を作ったときから・1 行 1 列のノードも同じ）。欄の値（既定 12）との差だけ、見出しとそれ以外を
+//   同じだけ大きく・小さくする＝見出し＝欄の値・表のセルと 1 行のノード＝欄の値−1（既定のままなら従来と同じ大きさ・同じ DOM）。
+//   段の高さは大きくしたぶんだけ広げる（小さくしても高さは既定のまま＝説明有シェイプの名称帯 noteTitleH と同じ流儀）。
+//   ER・UML の区画は従来どおり固定（type で分ける）
+function orgFontDelta(n){ return (n&&n.type==='org_node')?nodeFontSize(n)-AUTO_FONT:0; }
+function orgGrow(n){ return Math.max(0,orgFontDelta(n)); }
+// 見出し（ラベル有の 1 段目）は 12＋差・表のセルと 1 行のノード（区画が 1 つ）は 11＋差（区画を描く renderNodes と幅の計算 orgFitW で共用）
+function orgSecFont(n,sec){ return ((sec.style==='header'&&n.sections.length>1)?12:11)+orgFontDelta(n); }
+// v8.34追補: 文字を大きくした樹状図のノードは、いちばん長い見出し・セルが収まる幅まで広げる（広げるだけ・縮めない＝手で決めた幅を
+//   保つ。文字サイズが既定以下なら幅は変えない＝既存の図は変わらない）。表の列は等幅なので、いちばん長いセル×列数
+function orgFitW(n){
+  if(!orgGrow(n)||!n.sections||!n.sections.length) return n.w;
+  const pad=AUTO_PAD*2;
+  let need=0;
+  n.sections.forEach(sec=>{
+    if(sec.style==='header'||sec.style==='sub'){ need=Math.max(need,textW(sec.text||'',orgSecFont(n,sec))+pad); return; }
+    if(sec.style!=='table') return;
+    const rows=(sec.rows&&sec.rows.length)?sec.rows:[['']];
+    const cols=Math.max(1,Math.min(10,sec.cols||Math.max(...rows.map(r=>r.length))));
+    const fs=orgSecFont(n,sec);
+    let cell=0;
+    rows.forEach(r=>{ for(let ci=0;ci<cols;ci++) cell=Math.max(cell,textW(r[ci]!=null?String(r[ci]):'',fs)); });
+    need=Math.max(need,cols*(cell+pad));
+  });
+  return Math.max(n.w,Math.ceil(need));
 }
 
 // ── 接続線端点ラベル位置 ──
@@ -3347,6 +3394,7 @@ function init(){
     S.printPaper=PAPER_SIZES[st.printPaper]?st.printPaper:'A4';                    // v8.22: 改ページ計算の用紙（旧ファイルは A4 縦）
     S.printOrient=(st.printOrient==='landscape')?'landscape':'portrait';
     S.printFitTall=printFitNorm(st.printFitTall); S.printFitWide=printFitNorm(st.printFitWide);   // v8.27: 印刷のページ数指定（旧ファイルは空欄）
+    S.printDate=st.printDate!==false; S.printNamePt=printPtNorm(st.printNamePt); S.printDatePt=printPtNorm(st.printDatePt);   // v8.34追補: 印刷の帯の日付と文字サイズ（旧ファイルは日付あり・自動）
     S.style=(st.style&&STYLES[st.style])?st.style:'standard';   // v8.01: デザインテンプレートを復元（旧ファイルは標準）
     S.stepNums=!!st.stepNums;   // v8.01: 番号バッジ表示状態
     migrateOrgSections();         // v7.02: 旧2段(sub)→ミニ表へ自動移行（見た目不変）
@@ -5530,7 +5578,7 @@ function replaceNodeType(n,newType){
     } else {
       n.sections=[{text:name,style:'header'}];
     }
-    const totalH=n.sections.reduce((h,s)=>h+sectionSize(s,true),0);
+    const totalH=n.sections.reduce((h,s)=>h+sectionSize(s,true,orgGrow(n)),0);   // v8.34追補: 文字サイズぶん広がる段も入れる
     setSizeKeepCenter(n,n.w,Math.max(SD.org_node.h,totalH));   // v8.14: 中心を固定
     n.text='';
     S.sel=[n.id]; clearReplaceHL(); clearGuides(); snap(); render();
@@ -9638,9 +9686,10 @@ function render(){
   growForPorts();                     // v8.13追補: 接続点を等間隔にしても10px空かない箱を先に広げる
   S.nodes.forEach(n=>{
     if(!n.sections||!n.sections.length)return;
-    const sh=calcSectionsH(n.sections,n.type==='org_node');
+    const sh=calcSectionsH(n.sections,n.type==='org_node',orgGrow(n));   // v8.34追補: 樹状図は文字サイズぶん段が広がる
     // v8.13追補: 区画（ER/UML/樹状図）も中心を固定して伸縮させる
-    if(tV()) setSizeKeepCenter(n,n.w,Math.max(SD[n.type]?.h||40,sh));   // v7.00: 組織図は横向きでも高さ側（tV）
+    // v8.34追補: 樹状図のノードは文字を大きくしたら幅も広げる（orgFitW・ほかは n.w のまま）
+    if(tV()) setSizeKeepCenter(n,orgFitW(n),Math.max(SD[n.type]?.h||40,sh));   // v7.00: 組織図は横向きでも高さ側（tV）
     else     setSizeKeepCenter(n,Math.max(SD[n.type]?.h||40,sh),n.h);
   });
   orgFitGroups();   // v7.02: orgWrap 付き部門枠を配下の外接枠へ自動フィット（整列・移動後も追従）
@@ -10599,7 +10648,7 @@ function shapeEl(n,sel){
     grp.appendChild(e('rect',{x:n.x,y:n.y,width:n.w,height:n.h,rx:styRx(4),fill:fillC,stroke:st,'stroke-width':sw}));
     const offs=sectionOffsets(n);
     if(tV()){   // v7.00: 組織図は横向きでも縦モードの体裁
-      const _hh=n.type==='org_node'?ORG_HDR_H:SECT_HDR_H;   // v7.03: 樹状図専用高さ
+      const _hh=n.type==='org_node'?ORG_HDR_H+orgGrow(n):SECT_HDR_H;   // v7.03: 樹状図専用高さ／v8.34追補: 文字サイズぶん広げる
       n.sections.forEach((sec,si)=>{
         if(si>0) grp.appendChild(e('line',{x1:n.x,y1:offs[si],x2:n.x+n.w,y2:offs[si],stroke:st,'stroke-width':'.8',opacity:'.6','pointer-events':'none'}));
         if(si===0&&sec.style==='header'&&n.sections.length>1) grp.appendChild(e('rect',{x:n.x+sw/2,y:n.y+sw/2,width:n.w-sw,height:_hh-sw/2,rx:3,fill:fillC,opacity:'.5','pointer-events':'none'}));
@@ -11008,7 +11057,7 @@ function renderNodes(){
       if(tV()){   // v7.00: 組織図は横向きでも横書き（職制一覧表の形）
         // v8.10: 見出し段・副見出し段・一覧行に文字揃えを反映（ミニ表のセルは列の揃えが優先なので対象外）
         n.sections.forEach((sec,si)=>{
-          const secH=sectionSize(sec,n.type==='org_node');
+          const secH=sectionSize(sec,n.type==='org_node',orgGrow(n));   // v8.34追補: 樹状図は文字サイズぶん段が広がる
           // v8.14: 段ごとの揃え。段に指定があればそれ、無ければシェイプ全体の揃えに従う。
           const _sa=alignH(sec.align||nodeAlign(n),n.x,n.w,8);
           if(isEditingField(n.id,si)){ /* v8.20: この段の編集中は文字・ミニ表の中身を描かない（編集欄が唯一の表示） */ }
@@ -11023,18 +11072,20 @@ function renderNodes(){
             } else {
               const hdrY=(n.type==='org_node'&&n.sections.length===1)?n.y+n.h/2:offs[si]+secH/2;
               const isPlain=n.type==='org_node'&&n.sections.length===1;
-              const t=e('text',{x:_sa.x,y:hdrY,'text-anchor':_sa.anchor,'dominant-baseline':'middle','font-size':isPlain?'11':'12','font-weight':isPlain?'normal':'600',fill:isPlain?'#475569':'#1e293b','pointer-events':'none'});
+              // v8.34追補: 樹状図は文字サイズ欄の値で描く（orgSecFont＝見出し 12・1 行のノード 11 に、欄の値との差を加算する。ER は 12 のまま）
+              const t=e('text',{x:_sa.x,y:hdrY,'text-anchor':_sa.anchor,'dominant-baseline':'middle','font-size':String(n.type==='org_node'?orgSecFont(n,sec):12),'font-weight':isPlain?'normal':'600',fill:isPlain?'#475569':'#1e293b','pointer-events':'none'});
               if(isUmlShape(n.type)&&n.abstract)t.setAttribute('font-style','italic');
               t.textContent=sec.text||''; ng.appendChild(t);
             }
           } else if(sec.style==='sub'){
-            const t=e('text',{x:_sa.x,y:offs[si]+secH/2,'text-anchor':_sa.anchor,'dominant-baseline':'middle','font-size':'11',fill:'#475569','pointer-events':'none'});
+            const t=e('text',{x:_sa.x,y:offs[si]+secH/2,'text-anchor':_sa.anchor,'dominant-baseline':'middle','font-size':String(11+orgFontDelta(n)),fill:'#475569','pointer-events':'none'});   // v8.34追補: 樹状図は文字サイズ欄の値との差を加算する
             t.textContent=sec.text||''; ng.appendChild(t);
           } else if(sec.style==='table'){
             // v7.02: 行×列ミニ表（タイトル段の下の表部。1列1行＝旧「氏名」段と同じ見た目）
             const rows=(sec.rows&&sec.rows.length)?sec.rows:[['']];
             const cols=Math.max(1,Math.min(10,sec.cols||Math.max(...rows.map(r=>r.length))));
-            const rh=ORG_ROW_H, cw=n.w/cols;   // v7.03: 行高22（既定の箱48px＝26+22）
+            const rh=ORG_ROW_H+orgGrow(n), cw=n.w/cols;   // v7.03: 行高22（既定の箱48px＝26+22）／v8.34追補: 文字サイズぶん広げる
+            const _cfs=String(orgSecFont(n,sec));         // v8.34追補: セルの文字＝文字サイズ欄の値−1（既定 11）
             const tableOnly=n.type==='org_node'&&n.sections.length===1;
             const tblOfsY=tableOnly?(n.y+(n.h-rows.length*rh)/2-offs[si]):0;
             rows.forEach((row,ri)=>{
@@ -11043,7 +11094,7 @@ function renderNodes(){
               for(let ci=0;ci<cols;ci++){
                 const cell=(row[ci]!=null?String(row[ci]):'');
                 if(cell==='')continue;
-                const t=e('text',{x:n.x+cw*ci+cw/2,y:ry+rh/2,'text-anchor':'middle','dominant-baseline':'middle','font-size':'11',fill:'#475569','pointer-events':'none'});
+                const t=e('text',{x:n.x+cw*ci+cw/2,y:ry+rh/2,'text-anchor':'middle','dominant-baseline':'middle','font-size':_cfs,fill:'#475569','pointer-events':'none'});
                 t.textContent=cell; ng.appendChild(t);
               }
             });
@@ -15178,7 +15229,8 @@ function docState(){
   return {diagramType:S.diagramType,orientation:S.orientation,lanes:S.lanes,nodes:S.nodes,edges:S.edges,
           diagramName:exportDiagramName(),gantt:S.gantt,mindLayout:S.mindLayout,gridOn:S.gridOn,
           style:S.style,stepNums:S.stepNums,mindBranch:S.mindBranch,mindReserve:S.mindReserve||[],
-          printPaper:S.printPaper,printOrient:S.printOrient,printFitTall:S.printFitTall,printFitWide:S.printFitWide};   // v8.27: ページ数指定も印刷結果を変えるので指紋に   // v8.22: 用紙は印刷結果を変えるので指紋に含める（pbPreview は表示だけなので含めない）
+          printPaper:S.printPaper,printOrient:S.printOrient,printFitTall:S.printFitTall,printFitWide:S.printFitWide,
+          printDate:S.printDate,printNamePt:S.printNamePt,printDatePt:S.printDatePt};   // v8.34追補: 印刷の帯の日付と文字サイズも印刷結果を変えるので指紋に   // v8.27: ページ数指定も印刷結果を変えるので指紋に   // v8.22: 用紙は印刷結果を変えるので指紋に含める（pbPreview は表示だけなので含めない）
 }
 function docFingerprint(){ return JSON.stringify(docState()); }
 let savedFingerprint=null;   // null＝基準がまだ無い（起動直後・新規作成ダイアログ表示中）
@@ -15421,7 +15473,7 @@ function buildSaveHtml(name){
   if(!S.docId) S.docId=newDocId();   // v8.09: 上書き保存で保存先ファイルを照合するための一意ID
   const safe=(name||'ダイアグラム').replace(/[\\/:*?"<>|]/g,'_');
   setTabTitleFromFilename(safe);   // v6.17追補: 保存後のタブ名称＝保存ファイル名。outerHTML化の前に反映＝保存HTMLの<title>にも同名が入る
-  const st={diagramType:S.diagramType,orientation:S.orientation,lanes:S.lanes,nodes:S.nodes,edges:S.edges,uid:S.uid,diagramName:name,gantt:S.gantt,mindLayout:S.mindLayout,gridOn:S.gridOn,style:S.style,stepNums:S.stepNums,docId:S.docId,mindBranch:S.mindBranch,mindReserve:S.mindReserve,printPaper:S.printPaper,printOrient:S.printOrient,printFitTall:S.printFitTall,printFitWide:S.printFitWide,appVer:APP_VER};   // v8.22: 改ページ計算に使う用紙   // v8.14: 保存した版番号（インポート時に旧版かどうかを判断する）   // v7.00: 方眼グリッド / v8.01: デザインテンプレート・番号バッジも保存
+  const st={diagramType:S.diagramType,orientation:S.orientation,lanes:S.lanes,nodes:S.nodes,edges:S.edges,uid:S.uid,diagramName:name,gantt:S.gantt,mindLayout:S.mindLayout,gridOn:S.gridOn,style:S.style,stepNums:S.stepNums,docId:S.docId,mindBranch:S.mindBranch,mindReserve:S.mindReserve,printPaper:S.printPaper,printOrient:S.printOrient,printFitTall:S.printFitTall,printFitWide:S.printFitWide,printDate:S.printDate,printNamePt:S.printNamePt,printDatePt:S.printDatePt,appVer:APP_VER};   // v8.34追補: 印刷の帯の日付と文字サイズ   // v8.22: 改ページ計算に使う用紙   // v8.14: 保存した版番号（インポート時に旧版かどうかを判断する）   // v7.00: 方眼グリッド / v8.01: デザインテンプレート・番号バッジも保存
   const SCR='<scr'+'ipt',CSCR='</scr'+'ipt>';
   const stateJson=JSON.stringify(st).replace(new RegExp(CSCR,'gi'),'<\\/script>');
   // v8.33追補: 前の図のデータの script は DOM で外し、新しいデータは <head> の閉じタグ（head 要素の outerHTML の末尾＝本物）の
@@ -15747,29 +15799,48 @@ function printFrameCuts(pv,c){
 //   広いほど大きい）に日付が重なっていた（ユーザー報告 2026-09-25「日付は一番右上（凡例より上）に」）。凡例と横並びのときは右の列に
 //   日付の行（上の余白 6＋文字＋下の余白 4）をとってその下に凡例。図面名が長く日付と同じ行に収まらないときは、日付だけ帯の最上段に
 //   1 行とる（凡例なし・凡例を下の段に積むとき。ふだんの配置と帯の高さは従来どおり）
-function printBandMetrics(W,vbW,name){
-  const nameFs=Math.round(Math.max(24,Math.min(48,W*0.02)));
-  const dateFs=Math.round(nameFs*0.45);
+// v8.34追補: 帯の日付の ON/OFF（S.printDate）と、図の名称・日付の文字サイズ（S.printNamePt／S.printDatePt＝pt・null は従来の自動）。
+//   ユーザー決定（2026-11-12 質問 P1）＝pt で指定＝用紙の上の大きさ。図の幅（レーンの数）にも倍率・ページ数の指定にも関係なく、
+//   指定した大きさで印刷する。印刷は SVG を用紙の内容幅の scale% に描くので、SVG の 1 単位＝u mm（printBandUnit）。
+//   pt を SVG の単位に直すには pt×PT_MM／u。u を渡さない呼び出し・空欄の欄は従来どおり（図の幅から自動）。
+//   日付を出さないときは日付の幅と行を数えない（凡例と横並びなら凡例を帯の上下中央に）。図の名称も日付も凡例も無いときは帯を作らない（高さ 0）。
+//   PNG・SVG の書き出し（buildExportSvg）はこの関数を使わない＝変わらない（用紙が無く pt を当てはめられない・日付はもともと出ない）。
+const PT_MM=25.4/72;   // 1pt の mm
+function printPtNorm(v){ const n=Number(v); return (v!==null&&v!==''&&isFinite(n)&&n>=6&&n<=72)?Math.round(n*2)/2:null; }
+// fullW＝印刷の SVG の viewBox の幅（ガント以外は図の幅＋2＝左右 1px の拡張。ガントは SVG_W）
+function printBandUnit(fullW,scale){ return printAreaMm().w*Math.max(1,scale)/100/Math.max(1,fullW); }
+function printBandKey(){ return (S.printDate!==false?'D':'-')+(S.printNamePt||'a')+'/'+(S.printDatePt||'a'); }   // 倍率探索のメモ化の鍵に足す
+function printBandMetrics(W,vbW,name,u){
+  const autoFs=Math.round(Math.max(24,Math.min(48,W*0.02)));
+  const ptFs=pt=>(pt&&u>0)?pt*PT_MM/u:null;
+  const nameFs=ptFs(S.printNamePt)||autoFs;
+  const dateFs=ptFs(S.printDatePt)||Math.round(autoFs*0.45);   // 空欄＝従来の自動（図の名称の自動の大きさの 0.45 倍）
+  const showDate=S.printDate!==false;
   const bandH=Math.round(nameFs*1.7);
   const lgIt=exportLegendItems(), lgm=lgIt?exportLegendMetrics(lgIt):null;
-  const titleW=name?legendTextW(name,nameFs):0, dateW=legendTextW(pdfTodayStr(),dateFs);
+  if(!name&&!showDate&&!lgm) return {nameFs,dateFs,bandH:0,lgIt,lgm,stack:false,bandH2:0,titleY:0,dateY:0,lgY:null,dateRight:10,dateOwnRow:false,showDate};
+  const titleW=name?legendTextW(name,nameFs):0, dateW=showDate?legendTextW(pdfTodayStr(),dateFs):0;
   const dateRight=lgm?8:10;          // 日付の右端＝凡例があれば凡例の右端にそろえる
-  const dateRowH=6+dateFs+4;         // 日付だけの行
+  const dateRowH=showDate?(6+dateFs+4):0;   // 日付だけの行
   const stack=!!(lgm&&name&&(titleW+20+Math.max(lgm.w,dateW)+16>vbW));
-  const dateOwnRow=!!(name&&(!lgm||stack)&&(10+titleW+16+dateW+dateRight>vbW));   // 図面名と同じ行に収まらない
+  const dateOwnRow=!!(showDate&&name&&(!lgm||stack)&&(10+titleW+16+dateW+dateRight>vbW));   // 図面名と同じ行に収まらない
   const top0=dateOwnRow?dateRowH:0;  // 図面名の行の上端
+  // 図面名の行の高さ。v8.34追補: 日付が同じ行にあり、図の名称より大きく指定されたときは日付の高さぶん（帯からはみ出さないように）。
+  //   従来の自動では日付は図の名称の 0.45 倍＝bandH のまま
+  const rowH=(showDate&&!dateOwnRow&&!(lgm&&!stack))?Math.max(bandH,dateRowH):bandH;
   let bandH2,titleY,dateY,lgY=null;
-  if(lgm&&!stack){        // 凡例と横並び＝右の列に日付（上）と凡例（下）
-    bandH2=Math.max(bandH,dateRowH+lgm.h+6);
-    titleY=bandH2/2; dateY=6+dateFs/2; lgY=dateRowH;
+  if(lgm&&!stack){        // 凡例と横並び＝右の列に日付（上）と凡例（下）。v8.34追補: 日付なしは凡例を上下中央
+    if(showDate){ bandH2=Math.max(bandH,dateRowH+lgm.h+6); lgY=dateRowH; }
+    else { bandH2=Math.max(bandH,lgm.h+12); lgY=(bandH2-lgm.h)/2; }
+    titleY=bandH2/2; dateY=6+dateFs/2;
   } else if(lgm){         // 凡例を下の段に積む＝上の段に図面名と日付（従来）
-    bandH2=top0+bandH+lgm.h+6;
-    titleY=top0+Math.round(bandH*0.5); dateY=dateOwnRow?(6+dateFs/2):titleY; lgY=bandH2-lgm.h-3;
+    bandH2=top0+rowH+lgm.h+6;
+    titleY=top0+Math.round(rowH*0.5); dateY=dateOwnRow?(6+dateFs/2):titleY; lgY=bandH2-lgm.h-3;
   } else {                // 凡例なし＝図面名と日付を同じ行（従来）
-    bandH2=top0+bandH;
-    titleY=top0+bandH/2; dateY=dateOwnRow?(6+dateFs/2):titleY;
+    bandH2=top0+rowH;
+    titleY=top0+rowH/2; dateY=dateOwnRow?(6+dateFs/2):titleY;
   }
-  return {nameFs,dateFs,bandH,lgIt,lgm,stack,bandH2,titleY,dateY,lgY,dateRight,dateOwnRow};
+  return {nameFs,dateFs,bandH,lgIt,lgm,stack,bandH2,titleY,dateY,lgY,dateRight,dateOwnRow,showDate};
 }
 // 各ページ先頭で繰り返すレーン見出し帯の高さ（SVG座標）。縦レーンのみ＝横レーンの見出しは
 //   左端の列なのでどのスライスにも入る。非レーン図は 0。
@@ -15810,7 +15881,7 @@ function printPlanAt(pv,headPx,sideHead,name,W,scale){
   if(pv.w<=pageW+0.01){ cb={blocks:[{top:pv.x,bottom:pv.x+pv.w}],forced:0}; cstarts=[0]; }
   else { cb=pageBlocks(pv.x,pv.x+pv.w,pageW-sideHead,'x'); cstarts=pagePack(cb.blocks,pageW,pageW-sideHead); }
   const col0W=(cstarts.length>1)?(cb.blocks[cstarts[1]-1].bottom-pv.x):pv.w;
-  const bm=printBandMetrics(W,col0W,name);
+  const bm=printBandMetrics(W,col0W,name,printBandUnit(pv.w+2,sc));   // v8.34追補: pt 指定の文字サイズを SVG の単位へ（列が複数でも 1 単位の mm は全幅で決まる。+2＝expPDF が viewBox を左右 1px 広げるぶん）
   const budget=pageBudgetPx(pv.w,sc);
   const top=pv.y+headPx, bottom=pv.y+pv.h;
   // ブロックの最大長は「1ページ目の容量」に合わせる（1ページ目は図面名帯ぶん狭い）。
@@ -15836,10 +15907,10 @@ function printFitSearch(hi,okAt){
 }
 let _printFitCache={key:null,val:null};
 function printFitScale(pv,headPx,sideHead,name,W,fit){
-  const key=[S.printPaper,S.printOrient,fit.tall,fit.wide,pv.x,pv.y,pv.w,pv.h,headPx,sideHead,name,pdfTodayStr(),W,printGeomKey()].join('|');   // v8.31追補⑦: 日付の幅も帯の高さに効く
+  const key=[S.printPaper,S.printOrient,fit.tall,fit.wide,pv.x,pv.y,pv.w,pv.h,headPx,sideHead,name,pdfTodayStr(),W,printBandKey(),printGeomKey()].join('|');   // v8.31追補⑦: 日付の幅も帯の高さに効く
   if(_printFitCache.key===key) return _printFitCache.val;
   const a=printAreaMm(), vbW=Math.max(1,pv.w), vbH=Math.max(1,pv.h);
-  const bm0=printBandMetrics(W,vbW,name);
+  const bm0=printBandMetrics(W,vbW,name,printBandUnit(vbW+2,1000));   // v8.34追補: 上限の見積もり＝帯がいちばん低くなる倍率（pt 指定の帯は倍率が下がるほど SVG の上で高い）で＝上限を低く見積もらない
   let hi=1000;
   if(fit.wide) hi=Math.min(hi,100*fit.wide*vbW/(vbW+(fit.wide-1)*sideHead));
   if(fit.tall) hi=Math.min(hi,printAreaSafeH()*vbW*100*fit.tall/(a.w*(vbH+(fit.tall-1)*headPx+bm0.bandH2)));
@@ -15875,9 +15946,47 @@ function printPagePlan(userScale){
   const fit=printFitSpec();
   let scale, autoNote=null, fitNote=null;
   if(fit){ const f=printFitScale(pv,headPx,sideHead,name,W,fit); scale=f.scale; fitNote=f.note; }
-  else { const bm0=printBandMetrics(W,pv.w,name); const as=printAutoScale(pv.w,userScale,headPx,bm0.bandH2); scale=as.scale; autoNote=as.note; }
-  const p=printPlanAt(pv,headPx,sideHead,name,W,scale);
+  else { const bm0=printBandMetrics(W,pv.w,name,printBandUnit(pv.w+2,userScale)); let as=printAutoScale(pv.w,userScale,headPx,bm0.bandH2);
+    if(as.scale<userScale&&(S.printNamePt||S.printDatePt)){   // v8.34追補: pt 指定の帯は倍率を下げると SVG の上で高くなる＝下げた倍率の帯の高さでもう一度見積もる
+      const as2=printAutoScale(pv.w,userScale,headPx,printBandMetrics(W,pv.w,name,printBandUnit(pv.w+2,as.scale)).bandH2); if(as2.scale<as.scale) as=as2; }
+    scale=as.scale; autoNote=as.note; }
+  let p=printPlanAt(pv,headPx,sideHead,name,W,scale);
+  // v8.34追補: 最後のページが図の余白だけ（シェイプ・接続線・ラベルが 1 つも無い）なら、倍率を 1% ずつ下げて 1 つ前のページに収める
+  //   （ユーザー決定 2026-11-12 質問 P3＝案A）。原因は pageBlocks が最後の切れ端を中身を見ずに 1 ブロックにすること（v8.22 から）。
+  //   図の名称の帯＋図の高さが 1 ページを超えた量が「下の余白−PAGE_GAP_PAD」より小さいと、余白だけのページが出ていた。
+  //   ページ数を指定したとき（fit）は対象外。倍率の欄の数は書き換えず、理由を autoNote（expPDF のヒント）で伝える。
+  //   余白だけのページが出ない図は、計画も倍率も変わらない。
+  if(!fit&&printPlanTailEmpty(p)){
+    let s=scale, q=p;
+    while(s>10&&printPlanTailEmpty(q)){ s--; q=printPlanAt(pv,headPx,sideHead,name,W,s); }
+    if(!printPlanTailEmpty(q)){
+      const why=printPlanTailEmpty(p)==='x'?'図の右の余白だけが次のページに出るため':'図の下の余白だけが次のページに出るため';
+      p=q; scale=s; autoNote='倍率を'+userScale+'%→'+s+'%に自動調整しました（'+why+'）';
+    }
+  }
   return Object.assign({pv,W,headPx,sideHead,scale,autoNote,fitNote,fit},p);
+}
+// v8.34追補: 計画の最後の行（ページ）・最後の列が図の余白だけか。'y'＝最後の行・'x'＝最後の列・false＝どちらも中身がある。
+//   レーン境界でしか切らない向き（pageUseLaneBoundaries）は最後のページが必ずレーン 1 本ぶん＝対象外。
+//   中身＝シェイプ（縦棒・帯・グループ枠を含む）・接続線のラベル・接続線（画面に描いた線の外接矩形。迂回で図の下を回る線がある）。
+function printPlanTailEmpty(p){
+  const lastTop=(ax)=>{
+    const bl=(ax==='y')?p.blocks:p.cols.blocks, st=(ax==='y')?p.starts:p.cols.starts;
+    if(st.length<2||pageUseLaneBoundaries(ax)) return null;
+    return bl[st[st.length-1]].top;
+  };
+  const anyBeyond=(ax,t)=>{
+    const lo=(ax==='y')?(n=>n.y+n.h):(n=>n.x+n.w);
+    if(S.nodes.some(n=>n.x!=null&&n.y!=null&&lo(n)>t)) return true;
+    for(const k in _edgeLabelGeom){ const g=_edgeLabelGeom[k]; if(g&&((ax==='y')?(g.my+(g.h||0)/2):(g.mx+(g.w||0)/2))>t) return true; }
+    for(const el of document.querySelectorAll('#g-edges path')){
+      let b; try{ b=el.getBBox(); }catch(_){ continue; }
+      if(b&&(b.width>0||b.height>0)&&((ax==='y')?(b.y+b.height):(b.x+b.width))>t) return true;
+    }
+    return false;
+  };
+  for(const ax of ['y','x']){ const t=lastTop(ax); if(t!=null&&!anyBeyond(ax,t)) return ax; }
+  return false;
 }
 // ════════════════════════════════════════════════════════════════════════════
 //  v8.31: ガント工程表のページ数指定（縦○ページだけ・横は常に 1 ページ幅・縮小のみ）
@@ -15920,7 +16029,7 @@ function ganttPrintRowBlocks(){
 //   forced＝そのページの容量を超えるブロック（ブラウザが行の途中で切る）の数。
 function ganttPrintPlanAt(scale,blocks){
   const W=Math.max(1,SVG_W), sc=Math.max(1,scale);
-  const bm=printBandMetrics(W,W,exportDiagramName());
+  const bm=printBandMetrics(W,W,exportDiagramName(),printBandUnit(W,sc));   // v8.34追補: pt 指定の文字サイズ
   const hdrOn=!!(S.gantt&&S.gantt.header&&S.gantt.header.show);
   const axisTop=ganttHeadH();
   const onceTop=hdrOn?0:(-bm.bandH2);   // v8.31追補⑦: 図面名帯の高さ（ガントは凡例なし＝ふだん bandH と同じ・図面名が長いと日付の行ぶん高い）
@@ -15937,7 +16046,7 @@ function ganttPrintPlanAt(scale,blocks){
 //   v8.31追補⑦: 図面名と日付も＝図面名帯の高さ（見出し欄なしのとき 1 ページ目の容量）が図面名・日付の幅で変わる（長いと日付の行が増える）
 function ganttPrintGeomKey(blocks){
   return [S.printPaper,S.printOrient,SVG_W,ganttHeadH(),ganttWrapOn()?1:0,(S.gantt&&S.gantt.header&&S.gantt.header.show)?1:0,
-    exportDiagramName(),pdfTodayStr(),blocks.map(b=>b.top+','+b.bottom).join(';')].join('|');
+    exportDiagramName(),pdfTodayStr(),printBandKey(),blocks.map(b=>b.top+','+b.bottom).join(';')].join('|');   // v8.34追補: 帯の日付・文字サイズも帯の高さに効く
 }
 // 縦 tall ページに収める倍率。上限は「見出し欄 1 回＋時間軸ヘッダー tall 回＋全行が tall ページに入る」解析値と 100% の小さい方
 //   （縮小のみ＝縦だけ指定でも拡大しない・ユーザー決定）。判定は「強制分割なし かつ 行数≤tall」。通らなければ 10%。
@@ -16017,12 +16126,32 @@ function onPrintPaperChange(){
   syncPrintFitUI();   // v8.31: 用紙を変えるとページ数指定の倍率も変わる＝読み出し「→ nn%」を次の render を待たず更新（v8.27 からの取りこぼし）
   renderPageBreaks();
 }
+// v8.34追補: 印刷の帯の「日付を印刷」と文字サイズ（pt）の欄→状態。帯の高さが変わると改ページ位置・ページ数指定の倍率も変わる。
+//   入力中の欄は書き換えない（6 未満を打つ途中で消さない）＝範囲外・空欄は状態だけ自動（null）にする
+function onPrintBandChange(){
+  const c=document.getElementById('print-date'); if(c) S.printDate=!!c.checked;
+  const rd=id=>{ const el=document.getElementById(id); return el?printPtNorm(el.value):null; };
+  S.printNamePt=rd('print-name-pt'); S.printDatePt=rd('print-date-pt');
+  syncPrintFitUI(); renderPageBreaks();
+}
+// 状態→欄。見出し欄を出している工程表は帯を印刷しない（見出し欄の「作成日を表示」を使う）＝欄を無効（グレー）にする
+function syncPrintBandUI(){
+  const c=document.getElementById('print-date'), n=document.getElementById('print-name-pt'), d=document.getElementById('print-date-pt'), box=document.getElementById('print-band-set');
+  if(!c||!n||!d) return;
+  if(c.checked!==(S.printDate!==false)) c.checked=(S.printDate!==false);
+  const put=(el,v)=>{ if(document.activeElement===el) return; const t=v?String(v):''; if(el.value!==t) el.value=t; };
+  put(n,S.printNamePt); put(d,S.printDatePt);
+  const off=(S.diagramType==='gantt'&&!!(S.gantt&&S.gantt.header&&S.gantt.header.show));
+  [c,n,d].forEach(el=>{ el.disabled=off; });
+  if(box){ box.style.opacity=off?'.45':''; box.title=off?'見出し欄を出している工程表は、印刷の帯の代わりに見出し欄を印刷します（日付は見出しの編集の「作成日を表示」で切り替え）':''; }
+}
 function syncPrintPaperUI(){
   const p=document.getElementById('print-paper'), o=document.getElementById('print-orient');
   if(p) p.value=S.printPaper||'A4';
   if(o) o.value=S.printOrient||'portrait';
   updatePageBreakBtn();
   syncPrintFitUI();   // v8.27: ページ数の欄・倍率欄の排他・読み出し
+  syncPrintBandUI();  // v8.34追補: 印刷の帯の日付・文字サイズの欄
 }
 function renderPageBreaks(){
   const g=document.getElementById('g-pagebreak'); if(!g) return;
@@ -16309,7 +16438,7 @@ async function expPDF(){
   const _gp=(S.diagramType==='gantt')?ganttPrintPlan():null;
   if(_gp) scale=_gp.scale;
   const _bandW=_pl?_pl.col0W:vbW;
-  const _bm=_pl?_pl.bm:printBandMetrics(W,vbW,name);
+  const _bm=_pl?_pl.bm:printBandMetrics(W,vbW,name,printBandUnit(vbW,scale));   // v8.34追補: ガントは用紙自由（指定なし）でも「用紙」欄の紙で pt を換算する
   const nameFs=_bm.nameFs, dateFs=_bm.dateFs, _lgIt=_bm.lgIt, _lgm=_bm.lgm;
   // v8.13追補: 図面名・日付の白い帯は「最背面」へ入れる。従来は appendChild ＝最前面で、帯の下端がちょうど
   //   y=vbY(=0) にあるため、そこに乗るレーン外枠・見出し帯の線（線幅1.5／1）の上半分を白く塗りつぶし、
@@ -16322,7 +16451,7 @@ async function expPDF(){
   const _bt=vbY-bandH2;
   if(name){ const tn=e('text',{x:vbX+10,y:_bt+_bm.titleY,'dominant-baseline':'middle','text-anchor':'start','font-size':String(nameFs),'font-weight':'700',fill:'#1e293b','font-family':'sans-serif'}); tn.textContent=name; svg.appendChild(tn); }
   const tdt=e('text',{x:vbX+_bandW-_bm.dateRight,y:_bt+_bm.dateY,'dominant-baseline':'middle','text-anchor':'end','font-size':String(dateFs),fill:'#475569','font-family':'sans-serif'});
-  tdt.textContent=pdfTodayStr(); svg.appendChild(tdt);
+  tdt.textContent=pdfTodayStr(); if(_bm.showDate) svg.appendChild(tdt);   // v8.34追補: 「日付を印刷」を外したら出さない
   if(_lgm) drawExportLegend(svg,_lgIt,_lgm,vbX+_bandW-8-_lgm.w,_bt+_bm.lgY);   // v8.16: シェイプ凡例（右上。横に並ばない幅では下の段）
   let bodyInner;
   if(S.diagramType==='gantt'){
@@ -16997,6 +17126,7 @@ function importStateFromHtml(html,asked){
   S.printPaper=PAPER_SIZES[st.printPaper]?st.printPaper:'A4';                    // v8.22: 改ページ計算の用紙（旧ファイルは A4 縦）
   S.printOrient=(st.printOrient==='landscape')?'landscape':'portrait';
   S.printFitTall=printFitNorm(st.printFitTall); S.printFitWide=printFitNorm(st.printFitWide);   // v8.27: 印刷のページ数指定（旧ファイルは空欄）
+  S.printDate=st.printDate!==false; S.printNamePt=printPtNorm(st.printNamePt); S.printDatePt=printPtNorm(st.printDatePt);   // v8.34追補: 印刷の帯の日付と文字サイズ（旧ファイルは日付あり・自動）
   S.gridOn=st.gridOn!==false;   // v7.00: 方眼グリッド状態を復元（旧ファイルは既定オン）
   // v8.14: デザインテンプレートと番号バッジの復元が抜けており、インポートしても
   //   直前に開いていた図の設定が残ってしまっていた（起動時の復元処理には入っていた）。
