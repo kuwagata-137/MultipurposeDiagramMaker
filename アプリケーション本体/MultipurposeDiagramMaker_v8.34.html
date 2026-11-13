@@ -2101,13 +2101,14 @@ function toLogicalSize(w,h){return isV()?{mainLen:h,crossLen:w}:{mainLen:w,cross
 function toPhysicalSize(mainLen,crossLen){return isV()?{w:crossLen,h:mainLen}:{w:mainLen,h:crossLen}}
 
 // ── 多セクションノード機構 ──
-function calcSectionsH(sections,org){
+// v8.34追補: grow＝樹状図のノードの文字を大きくしたぶん、見出し段と表の 1 行を広げる量（orgGrow・ER/UML は 0）
+function calcSectionsH(sections,org,grow=0){
   if(!sections||!sections.length)return 0;
   let h=0;
   sections.forEach(s=>{
-    if(s.style==='header') h+=org?ORG_HDR_H:SECT_HDR_H;   // v7.03: 樹状図はコンパクトな専用高さ
+    if(s.style==='header') h+=org?ORG_HDR_H+grow:SECT_HDR_H;   // v7.03: 樹状図はコンパクトな専用高さ
     else if(s.style==='sub') h+=SECT_HDR_H-4;
-    else if(s.style==='table') h+=Math.max(1,(s.rows||[]).length)*ORG_ROW_H;   // v7.02 ミニ表 / v7.03 行高22
+    else if(s.style==='table') h+=Math.max(1,(s.rows||[]).length)*(ORG_ROW_H+grow);   // v7.02 ミニ表 / v7.03 行高22
     else if(s.rows) h+=Math.max(1,s.rows.length)*SECT_ROW_H+SECT_PAD*2;
   });
   return h;
@@ -2116,21 +2117,50 @@ function sectionOffsets(n){
   const offsets=[];
   let pos=tV()?n.y:n.x;   // v7.00: 組織図は横向きでもセクションを縦積み（tV）
   const org=n.type==='org_node';   // v7.03: 樹状図専用高さ
+  const grow=orgGrow(n);
   (n.sections||[]).forEach(s=>{
     offsets.push(pos);
-    if(s.style==='header') pos+=org?ORG_HDR_H:SECT_HDR_H;
+    if(s.style==='header') pos+=org?ORG_HDR_H+grow:SECT_HDR_H;
     else if(s.style==='sub') pos+=SECT_HDR_H-4;
-    else if(s.style==='table') pos+=Math.max(1,(s.rows||[]).length)*ORG_ROW_H;   // v7.02 ミニ表 / v7.03 行高22
+    else if(s.style==='table') pos+=Math.max(1,(s.rows||[]).length)*(ORG_ROW_H+grow);   // v7.02 ミニ表 / v7.03 行高22
     else if(s.rows) pos+=Math.max(1,s.rows.length)*SECT_ROW_H+SECT_PAD*2;
   });
   return offsets;
 }
-function sectionSize(sec,org){
-  if(sec.style==='header') return org?ORG_HDR_H:SECT_HDR_H;   // v7.03: 樹状図専用高さ
+function sectionSize(sec,org,grow=0){
+  if(sec.style==='header') return org?ORG_HDR_H+grow:SECT_HDR_H;   // v7.03: 樹状図専用高さ
   if(sec.style==='sub') return SECT_HDR_H-4;
-  if(sec.style==='table') return Math.max(1,(sec.rows||[]).length)*ORG_ROW_H;   // v7.02 ミニ表 / v7.03 行高22
+  if(sec.style==='table') return Math.max(1,(sec.rows||[]).length)*(ORG_ROW_H+grow);   // v7.02 ミニ表 / v7.03 行高22
   if(sec.rows) return Math.max(1,sec.rows.length)*SECT_ROW_H+SECT_PAD*2;
   return SECT_HDR_H;
+}
+// v8.34追補: 樹状図のノード（org_node）の文字サイズ（ユーザー報告 2026-11-13「2行以上もしくは2列以上あるシェイプの文字の大きさが
+//   変更できない」）。区画の文字を 12（見出し）／11（表のセル・1 行のノード）の固定で描き、文字サイズ欄の値 n.fontSize を読んで
+//   いなかった（v8.14 で文字サイズ欄を作ったときから・1 行 1 列のノードも同じ）。欄の値（既定 12）との差だけ、見出しとそれ以外を
+//   同じだけ大きく・小さくする＝見出し＝欄の値・表のセルと 1 行のノード＝欄の値−1（既定のままなら従来と同じ大きさ・同じ DOM）。
+//   段の高さは大きくしたぶんだけ広げる（小さくしても高さは既定のまま＝説明有シェイプの名称帯 noteTitleH と同じ流儀）。
+//   ER・UML の区画は従来どおり固定（type で分ける）
+function orgFontDelta(n){ return (n&&n.type==='org_node')?nodeFontSize(n)-AUTO_FONT:0; }
+function orgGrow(n){ return Math.max(0,orgFontDelta(n)); }
+// 見出し（ラベル有の 1 段目）は 12＋差・表のセルと 1 行のノード（区画が 1 つ）は 11＋差（区画を描く renderNodes と幅の計算 orgFitW で共用）
+function orgSecFont(n,sec){ return ((sec.style==='header'&&n.sections.length>1)?12:11)+orgFontDelta(n); }
+// v8.34追補: 文字を大きくした樹状図のノードは、いちばん長い見出し・セルが収まる幅まで広げる（広げるだけ・縮めない＝手で決めた幅を
+//   保つ。文字サイズが既定以下なら幅は変えない＝既存の図は変わらない）。表の列は等幅なので、いちばん長いセル×列数
+function orgFitW(n){
+  if(!orgGrow(n)||!n.sections||!n.sections.length) return n.w;
+  const pad=AUTO_PAD*2;
+  let need=0;
+  n.sections.forEach(sec=>{
+    if(sec.style==='header'||sec.style==='sub'){ need=Math.max(need,textW(sec.text||'',orgSecFont(n,sec))+pad); return; }
+    if(sec.style!=='table') return;
+    const rows=(sec.rows&&sec.rows.length)?sec.rows:[['']];
+    const cols=Math.max(1,Math.min(10,sec.cols||Math.max(...rows.map(r=>r.length))));
+    const fs=orgSecFont(n,sec);
+    let cell=0;
+    rows.forEach(r=>{ for(let ci=0;ci<cols;ci++) cell=Math.max(cell,textW(r[ci]!=null?String(r[ci]):'',fs)); });
+    need=Math.max(need,cols*(cell+pad));
+  });
+  return Math.max(n.w,Math.ceil(need));
 }
 
 // ── 接続線端点ラベル位置 ──
@@ -5548,7 +5578,7 @@ function replaceNodeType(n,newType){
     } else {
       n.sections=[{text:name,style:'header'}];
     }
-    const totalH=n.sections.reduce((h,s)=>h+sectionSize(s,true),0);
+    const totalH=n.sections.reduce((h,s)=>h+sectionSize(s,true,orgGrow(n)),0);   // v8.34追補: 文字サイズぶん広がる段も入れる
     setSizeKeepCenter(n,n.w,Math.max(SD.org_node.h,totalH));   // v8.14: 中心を固定
     n.text='';
     S.sel=[n.id]; clearReplaceHL(); clearGuides(); snap(); render();
@@ -9656,9 +9686,10 @@ function render(){
   growForPorts();                     // v8.13追補: 接続点を等間隔にしても10px空かない箱を先に広げる
   S.nodes.forEach(n=>{
     if(!n.sections||!n.sections.length)return;
-    const sh=calcSectionsH(n.sections,n.type==='org_node');
+    const sh=calcSectionsH(n.sections,n.type==='org_node',orgGrow(n));   // v8.34追補: 樹状図は文字サイズぶん段が広がる
     // v8.13追補: 区画（ER/UML/樹状図）も中心を固定して伸縮させる
-    if(tV()) setSizeKeepCenter(n,n.w,Math.max(SD[n.type]?.h||40,sh));   // v7.00: 組織図は横向きでも高さ側（tV）
+    // v8.34追補: 樹状図のノードは文字を大きくしたら幅も広げる（orgFitW・ほかは n.w のまま）
+    if(tV()) setSizeKeepCenter(n,orgFitW(n),Math.max(SD[n.type]?.h||40,sh));   // v7.00: 組織図は横向きでも高さ側（tV）
     else     setSizeKeepCenter(n,Math.max(SD[n.type]?.h||40,sh),n.h);
   });
   orgFitGroups();   // v7.02: orgWrap 付き部門枠を配下の外接枠へ自動フィット（整列・移動後も追従）
@@ -10617,7 +10648,7 @@ function shapeEl(n,sel){
     grp.appendChild(e('rect',{x:n.x,y:n.y,width:n.w,height:n.h,rx:styRx(4),fill:fillC,stroke:st,'stroke-width':sw}));
     const offs=sectionOffsets(n);
     if(tV()){   // v7.00: 組織図は横向きでも縦モードの体裁
-      const _hh=n.type==='org_node'?ORG_HDR_H:SECT_HDR_H;   // v7.03: 樹状図専用高さ
+      const _hh=n.type==='org_node'?ORG_HDR_H+orgGrow(n):SECT_HDR_H;   // v7.03: 樹状図専用高さ／v8.34追補: 文字サイズぶん広げる
       n.sections.forEach((sec,si)=>{
         if(si>0) grp.appendChild(e('line',{x1:n.x,y1:offs[si],x2:n.x+n.w,y2:offs[si],stroke:st,'stroke-width':'.8',opacity:'.6','pointer-events':'none'}));
         if(si===0&&sec.style==='header'&&n.sections.length>1) grp.appendChild(e('rect',{x:n.x+sw/2,y:n.y+sw/2,width:n.w-sw,height:_hh-sw/2,rx:3,fill:fillC,opacity:'.5','pointer-events':'none'}));
@@ -11026,7 +11057,7 @@ function renderNodes(){
       if(tV()){   // v7.00: 組織図は横向きでも横書き（職制一覧表の形）
         // v8.10: 見出し段・副見出し段・一覧行に文字揃えを反映（ミニ表のセルは列の揃えが優先なので対象外）
         n.sections.forEach((sec,si)=>{
-          const secH=sectionSize(sec,n.type==='org_node');
+          const secH=sectionSize(sec,n.type==='org_node',orgGrow(n));   // v8.34追補: 樹状図は文字サイズぶん段が広がる
           // v8.14: 段ごとの揃え。段に指定があればそれ、無ければシェイプ全体の揃えに従う。
           const _sa=alignH(sec.align||nodeAlign(n),n.x,n.w,8);
           if(isEditingField(n.id,si)){ /* v8.20: この段の編集中は文字・ミニ表の中身を描かない（編集欄が唯一の表示） */ }
@@ -11041,18 +11072,20 @@ function renderNodes(){
             } else {
               const hdrY=(n.type==='org_node'&&n.sections.length===1)?n.y+n.h/2:offs[si]+secH/2;
               const isPlain=n.type==='org_node'&&n.sections.length===1;
-              const t=e('text',{x:_sa.x,y:hdrY,'text-anchor':_sa.anchor,'dominant-baseline':'middle','font-size':isPlain?'11':'12','font-weight':isPlain?'normal':'600',fill:isPlain?'#475569':'#1e293b','pointer-events':'none'});
+              // v8.34追補: 樹状図は文字サイズ欄の値で描く（orgSecFont＝見出し 12・1 行のノード 11 に、欄の値との差を加算する。ER は 12 のまま）
+              const t=e('text',{x:_sa.x,y:hdrY,'text-anchor':_sa.anchor,'dominant-baseline':'middle','font-size':String(n.type==='org_node'?orgSecFont(n,sec):12),'font-weight':isPlain?'normal':'600',fill:isPlain?'#475569':'#1e293b','pointer-events':'none'});
               if(isUmlShape(n.type)&&n.abstract)t.setAttribute('font-style','italic');
               t.textContent=sec.text||''; ng.appendChild(t);
             }
           } else if(sec.style==='sub'){
-            const t=e('text',{x:_sa.x,y:offs[si]+secH/2,'text-anchor':_sa.anchor,'dominant-baseline':'middle','font-size':'11',fill:'#475569','pointer-events':'none'});
+            const t=e('text',{x:_sa.x,y:offs[si]+secH/2,'text-anchor':_sa.anchor,'dominant-baseline':'middle','font-size':String(11+orgFontDelta(n)),fill:'#475569','pointer-events':'none'});   // v8.34追補: 樹状図は文字サイズ欄の値との差を加算する
             t.textContent=sec.text||''; ng.appendChild(t);
           } else if(sec.style==='table'){
             // v7.02: 行×列ミニ表（タイトル段の下の表部。1列1行＝旧「氏名」段と同じ見た目）
             const rows=(sec.rows&&sec.rows.length)?sec.rows:[['']];
             const cols=Math.max(1,Math.min(10,sec.cols||Math.max(...rows.map(r=>r.length))));
-            const rh=ORG_ROW_H, cw=n.w/cols;   // v7.03: 行高22（既定の箱48px＝26+22）
+            const rh=ORG_ROW_H+orgGrow(n), cw=n.w/cols;   // v7.03: 行高22（既定の箱48px＝26+22）／v8.34追補: 文字サイズぶん広げる
+            const _cfs=String(orgSecFont(n,sec));         // v8.34追補: セルの文字＝文字サイズ欄の値−1（既定 11）
             const tableOnly=n.type==='org_node'&&n.sections.length===1;
             const tblOfsY=tableOnly?(n.y+(n.h-rows.length*rh)/2-offs[si]):0;
             rows.forEach((row,ri)=>{
@@ -11061,7 +11094,7 @@ function renderNodes(){
               for(let ci=0;ci<cols;ci++){
                 const cell=(row[ci]!=null?String(row[ci]):'');
                 if(cell==='')continue;
-                const t=e('text',{x:n.x+cw*ci+cw/2,y:ry+rh/2,'text-anchor':'middle','dominant-baseline':'middle','font-size':'11',fill:'#475569','pointer-events':'none'});
+                const t=e('text',{x:n.x+cw*ci+cw/2,y:ry+rh/2,'text-anchor':'middle','dominant-baseline':'middle','font-size':_cfs,fill:'#475569','pointer-events':'none'});
                 t.textContent=cell; ng.appendChild(t);
               }
             });

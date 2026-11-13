@@ -118,7 +118,7 @@ let S = {
   note, noteAlign,   // note/sys_input_desc/state_detail の補足本文と揃え（量に応じ自動リサイズ）
   sections,          // ER/UML/組織ノードの区画（複数行の内部テーブル）。sections[i].align で区画ごとの揃え
   textAlign,         // 'left'|'center'|'right'
-  fontSize,          // 文字サイズpx（v8.14。既定は defaultFontSize(n)＝通常12・グループ枠16。既定値ならキー削除。説明有シェイプでは名称の欄）
+  fontSize,          // 文字サイズpx（v8.14。既定は defaultFontSize(n)＝通常12・グループ枠16。既定値ならキー削除。説明有シェイプでは名称の欄。樹状図の org_node は見出し＝この値・表のセルと 1 行のノード＝この値−1＝orgSecFont・v8.34追補）
   noteFontSize,      // 説明有シェイプの説明欄の文字サイズpx（v8.29。既定 NOTE_FONT=10・既定値ならキー削除。noteFontSize(n) で読む）
   manualW, manualH,  // 手動リサイズ済みの印（v8.10）。付いていると autoFitNodeSize が下限扱い＝縮めない・文字は fitNodeFontSize で縮小
   dashed,            // true のみ保持＝点線（v8.18。枠線 stroke-dasharray を継承で内部仕切り線まで波及）
@@ -298,6 +298,7 @@ DIAGRAM_TYPES[key] = {
 ### 樹状図（`orgchart`＝旧組織図・`org*` 関数群）
 - ノード: `org_node`（ラベル有）/`org_node_plain`（役職なし）/`supplement`（補足情報・v8.34追補）/`org_group`（部門枠）。矢印なし（`noArrow`）。
 - 補足情報（v8.34追補）: 重ね置きシェイプ（`isOverlayShape`）のまま。ノードから線でつないだものは `orgTreeLayout` の対象＝葉として子の列に並ぶ・`orgChildrenOf` も子に数える（＋部下追加の置き場所と均等配置）。線の無いものは整列の対象外で、`layoutRecordAttachments`／`layoutFollowOverlays` で整列前に重なっていた（無ければ一番近い）ノードに付いて動く。`replaceTargetAt` は樹状図では補足情報とノードを入れ替えない（ノードの `sections` を守る）。≡（縦積み）は部下（`org_node`）がいる箱だけ。
+- 文字サイズ（v8.34追補）: 区画の文字は `orgSecFont(n,sec)`＝文字サイズ欄の値（既定 12）との差だけ、見出し（12）と表のセル・1 行のノード（11）を大きく・小さくする。段の高さは `orgGrow(n)`（大きくしたぶん・小さくしても 0）だけ広げる（`calcSectionsH`／`sectionOffsets`／`sectionSize` の 3 つ目の引数）。幅は `orgFitW(n)` で、いちばん長い見出し・セルが収まるまで広げる（広げるだけ。render が区画の大きさを決める所で呼ぶ）。ER・UML の区画は固定のまま（`orgFontDelta` は org_node 以外 0）。
 - バス型接続線（親から子へ横バス経由・`orgBusRoutes`/`busPos`調整）。ツリー自動レイアウト（`orgTreeLayout`）、部下追加＋ボタン（`orgAddSubordinate`）、部門枠の自動フィット（`orgFitGroups`）、内部テーブル編集（`orgEditTable`）。
 
 ### UMLクラス図（`uml`）
