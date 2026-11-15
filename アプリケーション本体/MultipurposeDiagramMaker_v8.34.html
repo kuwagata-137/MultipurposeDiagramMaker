@@ -996,7 +996,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="rgroup" id="grp-arrange"><div class="gbody">
     <span class="stack">
       <button class="tbtn" id="btn-orient" onclick="toggleOrientation()" title="縦/横レイアウト切替"><span id="orient-v">↕縦</span> <span id="orient-h">↔横</span></button>
-      <button class="tbtn" id="btn-arrange" onclick="autoLayout()" title="ノードを自動整列">⊞ 整列</button>
+      <button class="tbtn" id="btn-arrange" onclick="autoLayout()" title="シェイプを自動整列">⊞ 整列</button>
       <button class="tbtn" id="btn-grid" onclick="toggleGrid()" title="方眼グリッドの表示と吸着を切替（ドラッグ中はAltで一時解除）">⊹ 方眼</button>
     </span>
   </div><div class="glabel">配置</div></div>
@@ -1050,9 +1050,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div id="uml-tools" class="rgroup" style="display:none"><div class="gbody">
     <span class="stack">
       <button class="tbtn" id="btn-uml-abstract" onclick="umlToggleAbstract()" title="選択クラスの抽象(abstract)を切替">abstract</button>
-      <button class="tbtn" id="btn-uml-iface" onclick="umlToggleInterface()" title="選択ノードの«interface»表示を切替">«interface»</button>
+      <button class="tbtn" id="btn-uml-iface" onclick="umlToggleInterface()" title="選択シェイプの«interface»表示を切替">«interface»</button>
     </span>
-  </div><div class="glabel">クラス図ツール（選択ノード）</div></div>
+  </div><div class="glabel">クラス図ツール（選択シェイプ）</div></div>
   <div class="rgroup"><div class="gbody">
     <div class="rowset">
       <div class="rrow">
@@ -1096,17 +1096,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         <!-- v8.34追補: 印刷の帯（1 ページ目の上の白い帯）の日付の ON/OFF と、図の名称・日付の文字サイズ（pt＝用紙の上の大きさ。空欄＝従来の自動）。
              置き場所は「用紙」の行の右＝メニューバーの高さを変えない（ユーザー決定 2026-11-12 質問 P2）。単位は pt（同 質問 P1） -->
         <span id="print-band-set" style="display:flex;align-items:center;gap:4px;margin-left:8px;padding-left:8px;border-left:1px solid #e2e8f0">
-          <label class="rlabel" style="display:flex;align-items:center;gap:3px;color:#334155;cursor:pointer" title="印刷の 1 ページ目の上の帯の右上に、印刷した日の日付を出す（チェックを外すと出さない）">
+          <label class="rlabel" style="display:flex;align-items:center;gap:3px;color:#334155;cursor:pointer" title="タイトル欄の右上に、印刷した日の日付を印刷する（チェックを外すと印刷しない）">
             <input id="print-date" type="checkbox" checked onchange="onPrintBandChange()" style="margin:0">日付を印刷</label>
-          <span class="rlabel" style="margin-left:6px" title="印刷の 1 ページ目の上の帯の文字サイズ（pt＝用紙の上の大きさ）。空欄はアプリが図の幅から自動で決める">文字サイズ</span>
+          <span class="rlabel" style="margin-left:6px" title="タイトル欄の文字サイズ（pt＝用紙上の大きさ）。空欄はアプリが図の幅から自動で決める">文字サイズ</span>
           <span class="rlabel">図の名称</span>
           <input id="print-name-pt" type="number" min="6" max="72" step="0.5" placeholder="自動" oninput="onPrintBandChange()"
-                 title="印刷の帯の図の名称の文字サイズ（pt・6〜72）。空欄＝自動（図の幅から決める）。倍率やページ数で図を縮めても、この大きさで印刷します"
+                 title="タイトル欄の図の名称の文字サイズ（pt・6〜72）。空欄＝自動（図の幅から決める）。倍率やページ数で図を縮めても、この大きさで印刷します"
                  style="width:50px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#1e293b"/>
           <span class="rlabel">pt</span>
           <span class="rlabel" style="margin-left:4px">日付</span>
           <input id="print-date-pt" type="number" min="6" max="72" step="0.5" placeholder="自動" oninput="onPrintBandChange()"
-                 title="印刷の帯の日付の文字サイズ（pt・6〜72）。空欄＝自動（図の名称の自動の大きさの 0.45 倍）"
+                 title="タイトル欄の日付の文字サイズ（pt・6〜72）。空欄＝自動（図の名称の自動の大きさの 0.45 倍）"
                  style="width:50px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#1e293b"/>
           <span class="rlabel">pt</span>
         </span>
@@ -1494,7 +1494,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 <div id="org-modal">
   <div id="org-modal-bg" onclick="closeOrgModal()"></div>
   <div id="org-modal-box">
-    <div id="org-modal-title">箱の編集</div>
+    <div id="org-modal-title">ノードの編集</div>
     <div id="org-modal-fields"></div>
     <div id="org-modal-footer">
       <button onclick="closeOrgModal()">キャンセル</button>
@@ -4717,9 +4717,9 @@ function setTextAlign(align){
     if(n){
       const f=_editTarget.field;
       let label;
-      if(f==='note'){ n.noteAlign=align; label='備考'; }
+      if(f==='note'){ n.noteAlign=align; label='説明欄'; }
       else if(typeof f==='number'&&n.sections&&n.sections[f]){ n.sections[f].align=align; label='この欄'; }
-      else { n.textAlign=align; label='タイトル'; }
+      else { n.textAlign=align; label='名称'; }
       const inp=document.querySelector('#svg-editor textarea, #svg-editor input');
       if(inp) inp.style.textAlign=align;   // 打っている最中の見た目も合わせる
       snap(); render();
@@ -11177,7 +11177,7 @@ function renderNodes(){
         } else {
           const ph=e('text',{x:_na.x,y:divY+8,'text-anchor':_na.anchor,'dominant-baseline':'hanging',
             'font-size':String(_nfs),fill:'#94a3b8','font-style':'italic','pointer-events':'none'});
-          ph.textContent=n.type==='state_detail'?'entry / do / exit…':'備考…'; ng.appendChild(ph);
+          ph.textContent=n.type==='state_detail'?'entry / do / exit…':'説明…'; ng.appendChild(ph);
         }
         const nHA=e('rect',{x:n.x,y:divY,width:n.w,height:n.h-noteTitleH(n),fill:'transparent','pointer-events':'all'});
         nHA.addEventListener('dblclick',ev=>{ev.stopPropagation();if(nodeClickTimer!==null){clearTimeout(nodeClickTimer);nodeClickTimer=null;}editNote(n.id);});
@@ -11203,7 +11203,7 @@ function renderNodes(){
             });
           });
         } else {
-          const phText=n.type==='state_detail'?'アクション…':'備考…';
+          const phText=n.type==='state_detail'?'アクション…':'説明…';
           const phChars=[...phText];
           phChars.forEach((ch,ci)=>{
             const ct=e('text',{x:divX+10,y:n.y+_ti+ci*_nch,
@@ -11609,7 +11609,7 @@ function setMode(m){
 //   syncSelectionHint の復帰が共用＝文言の二重管理を防ぐ。ハンドツールは v8.26 の右クリック削除に加え、v8.28 で
 //   接続線の選択と○＋の接続もできるようになったので案内に含める
 function modeHint(){
-  if(S.mode==='connect') return '接続元ノードをクリック → 接続先ノードをクリック (Escでキャンセル)';
+  if(S.mode==='connect') return '接続元シェイプをクリック → 接続先シェイプをクリック (Escでキャンセル)';
   // v8.31追補㉗: 要約（ユーザー決定 2026-10-08）。シェイプと接続線の操作は選択モードと同じ（v8.28／v8.29）なので並べず、ハンドツールだけの
   //   違いと戻り方だけを書く。キャンバスが狭いと末尾から「…」で切れるので、大事なことを前に置く
   if(S.mode==='hand') return 'ハンドツール: 余白のドラッグで画面移動・ホイールで拡大縮小／シェイプと接続線は選択モードと同じ操作／Esc・左右同時押しで選択に戻る';
@@ -14859,7 +14859,7 @@ function editNote(nid){
   S.sel=[nid];
   setEditTarget(nid,'note');   // v8.14: 文字揃えの対象を備考欄だけにする／v8.20: render より先
   render();
-  const ph=n.type==='state_detail'?'entry / do / exit…':'備考…';
+  const ph=n.type==='state_detail'?'entry / do / exit…':'説明…';
   const _nfs=noteFontSize(n), _ntypo={fontPx:_nfs,lineH:noteLineH(_nfs)};   // v8.29: 説明欄の文字サイズ（描画と同じ組版・既定 10px／12px）
   const _ei=noteEditInset(n);   // v8.30: 編集欄の食い込み（既存 3 種は従来の 3・六角形は尖りの内側＝折り返し幅は描画と一致）
   if(isV()){
@@ -16143,7 +16143,7 @@ function syncPrintBandUI(){
   put(n,S.printNamePt); put(d,S.printDatePt);
   const off=(S.diagramType==='gantt'&&!!(S.gantt&&S.gantt.header&&S.gantt.header.show));
   [c,n,d].forEach(el=>{ el.disabled=off; });
-  if(box){ box.style.opacity=off?'.45':''; box.title=off?'見出し欄を出している工程表は、印刷の帯の代わりに見出し欄を印刷します（日付は見出しの編集の「作成日を表示」で切り替え）':''; }
+  if(box){ box.style.opacity=off?'.45':''; box.title=off?'見出し欄を表示している工程表は、タイトル欄の代わりに見出し欄を印刷します（日付は「見出しの編集」の「作成日を表示」で切り替え）':''; }
 }
 function syncPrintPaperUI(){
   const p=document.getElementById('print-paper'), o=document.getElementById('print-orient');
@@ -18272,7 +18272,7 @@ function runText2Diagram(){
   //   今の図種に混ざっていた）。同じ図種どうしは従来どおり Ctrl+Z で作る前に戻せる（確認の画面が無いので取り戻す手段を残す・ユーザー決定）
   if(S.diagramType!==dtBefore) snapAsFirst();
   closeText2Diagram();
-  let h=`生成しました: ノード${res.nodeCount} / 線${res.edgeCount}`;
+  let h=`生成しました: シェイプ${res.nodeCount} / 接続線${res.edgeCount}`;
   if(res.warnings&&res.warnings.length) h+=` / 警告${res.warnings.length}件（未対応記述をスキップ）`;
   hint(h);
 }
