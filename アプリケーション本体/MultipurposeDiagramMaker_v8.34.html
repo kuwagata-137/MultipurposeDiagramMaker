@@ -1402,9 +1402,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <label style="cursor:pointer"><input type="radio" name="mindexp-fmt" value="mm"> FreeMind（.mm／状態・重要度はアイコンでも表示）</label>
     </div>
     <div style="font-size:11px;color:#94a3b8;margin-bottom:12px">※ 折り畳み中の枝も含め、全ノードを書き出します。</div>
+    <!-- v8.34追補: 肯定の選択肢を左、否定・取りやめを右に並べる（Windows の順。質問 G4・2026-11-16） -->
     <div style="display:flex;justify-content:flex-end;gap:8px">
-      <button onclick="closeMindTextExport()">キャンセル</button>
       <button class="btn-primary" onclick="runMindTextExport()">↓ ダウンロード</button>
+      <button onclick="closeMindTextExport()">キャンセル</button>
     </div>
   </div>
 </div>
@@ -1438,9 +1439,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       placeholder="flowchart TD&#10;  A[開始] --> B{条件?}&#10;  B --&#124;はい&#124;--> C[処理]&#10;  B --&#124;いいえ&#124;--> D[終了]"
       style="width:100%;height:200px;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;resize:vertical"></textarea>
     <div id="t2d-msg" style="min-height:18px;margin:8px 0;font-size:12px;color:#64748b"></div>
+    <!-- v8.34追補: 肯定の選択肢を左、否定・取りやめを右に並べる（Windows の順。質問 G4・2026-11-16） -->
     <div style="display:flex;justify-content:flex-end;gap:8px">
-      <button onclick="closeText2Diagram()">キャンセル</button>
       <button class="btn-primary" onclick="runText2Diagram()">⚡ 生成 (Ctrl+Enter)</button>
+      <button onclick="closeText2Diagram()">キャンセル</button>
     </div>
   </div>
 </div>
@@ -1454,9 +1456,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <input id="save-filename-input" type="text" placeholder="ダイアグラム"
            onkeydown="if(event.key==='Enter')confirmSaveAs();else if(event.key==='Escape')closeSaveDialog()"/>
     <div id="save-modal-hint">.html が自動的に付きます</div>
+    <!-- v8.34追補: 肯定の選択肢を左、否定・取りやめを右に並べる（Windows の順。質問 G4・2026-11-16） -->
     <div id="save-modal-footer">
-      <button onclick="closeSaveDialog()">キャンセル</button>
       <button class="btn-primary" onclick="confirmSaveAs()">💾 保存</button>
+      <button onclick="closeSaveDialog()">キャンセル</button>
     </div>
   </div>
 </div>
@@ -1467,11 +1470,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div id="gantt-modal-box">
     <div id="gantt-modal-title">タスクの編集</div>
     <div id="gantt-modal-fields"></div>
+    <!-- v8.34追補: 肯定の選択肢を左、否定・取りやめを右に並べる（Windows の順。質問 G4・2026-11-16）。
+         ［🗑 削除］は左端のまま＝［適用］から離して押し間違いを防ぐ（質問 G5） -->
     <div id="gantt-modal-footer">
       <button class="btn-del" onclick="deleteGanttEdit()">🗑 削除</button>
       <div class="gm-right">
-        <button onclick="closeGanttModal()">キャンセル</button>
         <button class="btn-primary" onclick="confirmGanttEdit()">適用</button>
+        <button onclick="closeGanttModal()">キャンセル</button>
       </div>
     </div>
   </div>
@@ -1483,9 +1488,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="ghm-box">
     <div class="ghm-h">見出しの編集</div>
     <div id="ghm-body"></div>
+    <!-- v8.34追補: 肯定の選択肢を左、否定・取りやめを右に並べる（Windows の順。質問 G4・2026-11-16）。［閉じる］は入力を取り消して閉じる＝否定側 -->
     <div class="ghm-foot">
-      <button onclick="closeGanttHeadEditor(false)">閉じる</button>
       <button class="pri" onclick="closeGanttHeadEditor(true)">OK</button>
+      <button onclick="closeGanttHeadEditor(false)">閉じる</button>
     </div>
   </div>
 </div>
@@ -1496,9 +1502,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div id="org-modal-box">
     <div id="org-modal-title">ノードの編集</div>
     <div id="org-modal-fields"></div>
+    <!-- v8.34追補: 肯定の選択肢を左、否定・取りやめを右に並べる（Windows の順。質問 G4・2026-11-16） -->
     <div id="org-modal-footer">
-      <button onclick="closeOrgModal()">キャンセル</button>
       <button class="btn-primary" onclick="confirmOrgEdit()">適用</button>
+      <button onclick="closeOrgModal()">キャンセル</button>
     </div>
   </div>
 </div>
@@ -1507,9 +1514,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 <div id="confirm-modal" style="display:none">
   <div id="confirm-modal-box">
     <div id="confirm-modal-msg"></div>
+    <!-- v8.34追補: 肯定の選択肢を左、否定・取りやめを右に並べる（Windows の順。質問 G4・2026-11-16） -->
     <div id="confirm-modal-btns">
-      <button id="confirm-no" type="button" onclick="hideConfirm()">いいえ</button>
       <button id="confirm-yes" type="button" onclick="confirmYes()">はい</button>
+      <button id="confirm-no" type="button" onclick="hideConfirm()">いいえ</button>
     </div>
   </div>
 </div>
