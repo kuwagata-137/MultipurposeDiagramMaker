@@ -7,7 +7,7 @@
 備えた汎用ダイアグラムエディタへ発展させました。インストール不要で、HTML を開くだけで使えます。
 
 - **アプリ本体（最新版）**: [`アプリケーション本体/MultipurposeDiagramMaker_v8.34.html`](アプリケーション本体/MultipurposeDiagramMaker_v8.34.html)（2026-10-23）
-- **操作マニュアル**: [`マニュアル/MultipurposeDiagramMaker_操作マニュアル_v8.32.docx`](マニュアル/MultipurposeDiagramMaker_操作マニュアル_v8.32.docx)
+- **操作マニュアル**: [`マニュアル/MultipurposeDiagramMaker_操作マニュアル_v8.34.docx`](マニュアル/MultipurposeDiagramMaker_操作マニュアル_v8.34.docx)
 - 開発計画は [`開発資料/開発ロードマップ/開発ロードマップ.txt`](開発資料/開発ロードマップ/開発ロードマップ.txt)、
   変更履歴は [`開発資料/開発記録/開発記録.txt`](開発資料/開発記録/開発記録.txt) を参照してください。
 
@@ -70,7 +70,7 @@ BPMN・状態遷移図・ER 図・シーケンス図・UML クラス図は、新
 アプリケーション本体/
   MultipurposeDiagramMaker_v8.34.html  アプリ本体（最新版 1 本だけ。これをブラウザで開く）
 マニュアル/
-  MultipurposeDiagramMaker_操作マニュアル_v8.32.docx   操作マニュアル（Word）
+  MultipurposeDiagramMaker_操作マニュアル_v8.34.docx   操作マニュアル（Word）
   作成ツール/
     capture-puppeteer.js マニュアル用のスクリーンショット撮影（注釈つき。Puppeteer／Playwright）
     manual-content.js    マニュアルの原稿

@@ -589,7 +589,8 @@
       完成イメージは screenshots/v817_menu_*.png）
     次の小変更: v8.35（大変更なら v9.00）※ 版を上げるのはユーザーが明示したときだけ
 
-    操作マニュアル: マニュアル/MultipurposeDiagramMaker_操作マニュアル_v8.32.docx（2026-10-15・v8.32 版。リポジトリで管理）
+    操作マニュアル: マニュアル/MultipurposeDiagramMaker_操作マニュアル_v8.34.docx（2026-11-17・v8.34 版。リポジトリで管理）
+      ※ 2026-11-17 に v8.33・v8.34（追補を含む）の変更を反映し、全章を撮り直した（経緯は 開発記録_v8.txt の末尾）。
       ※ 2026-10-03 の全面改訂（注釈付きの画面・手順表・実物画像）を土台に、v8.31追補⑰〜㉗と v8.32 を反映し、
         新しい名前（MultipurposeDiagramMaker）で撮り直した。原稿は manual-content.js、撮影は capture-puppeteer.js
         （章ごとに撮影可）、描画は create-manual.js（いずれも マニュアル/作成ツール/）。
