@@ -26,7 +26,10 @@ const os = require('os');
 const URL = 'http://localhost:8765/' + encodeURI('アプリケーション本体/MultipurposeDiagramMaker_v8.34.html');
 // 撮った画面はリポジトリのルートの screenshots/manual/（.gitignore 対象）
 const outDir = path.join(__dirname, '..', '..', 'screenshots', 'manual');
-const VW = 1600, VH = 900, DSF = 2;   // メニューバーが ‹ › なしで全部見える幅（実測 1583px）・2 倍の解像度
+// 画面全体の撮影の幅・高さ・2 倍の解像度。v8.32 まではメニューバーが ‹ › なしで全部見える幅（実測 1583px）だったが、
+// v8.34 で色のボタンと印刷の欄が増え、メニューバーはスイムレーン図で 1929px・ガントチャートで 2250px になった。
+// 画面全体の図の文字が小さくならないよう幅はそのままにし、メニューバーのボタン・ジャンルを撮るときだけ広げる（wideToolbar）
+const VW = 1600, VH = 900, DSF = 2;
 fs.mkdirSync(outDir, { recursive: true });
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -58,7 +61,11 @@ async function launch() {
   let pp = null;
   try { pp = require('puppeteer'); } catch (e) { }
   if (pp) {
-    const browser = await pp.launch({ headless: 'new', args: ['--no-sandbox'] });
+    // puppeteer に同梱の Chrome が無い PC（npx puppeteer browsers install をしていない）では、その PC の Chrome で撮る。
+    // プロキシのある環境では localhost への接続がプロキシへ回されて止まるので、直接つなぐ（2026-11-17）
+    let browser;
+    try { browser = await pp.launch({ headless: 'new', args: ['--no-sandbox'] }); }
+    catch (e) { browser = await pp.launch({ headless: 'new', channel: 'chrome', args: ['--no-sandbox', '--proxy-server=direct://', '--proxy-bypass-list=*'] }); }
     const page = await browser.newPage();
     await page.setViewport({ width: VW, height: VH, deviceScaleFactor: DSF });
     return {
@@ -284,6 +291,10 @@ async function drag(a, b, opts = {}) {
   return [x1, y1];
 }
 async function clickSel(sel) { await page.click(sel); await wait(150); }
+// 入力欄の文字を全部選んでから打ち直す。ヘッドレスの Chrome ではトリプルクリックで全部選ばれないことがあり、
+// 打った文字が元の文字の後ろに追加されていた（2026-11-17・「役職名総務部長」になった）。
+// page.$eval は、セレクターで選んだ要素に関数を実行する puppeteer／playwright の API（文字列を評価する eval ではない）
+async function retype(sel, v) { await page.click(sel); await page.$eval(sel, el => el.select()); await page.keyboard.type(v); }
 
 // 画面の撮影。opts:
 //   clip   … 省略＝画面全体（JPEG）／対象（box と同じ指定）＝その範囲を切り抜き（PNG）
@@ -292,7 +303,9 @@ async function clickSel(sel) { await page.click(sel); await wait(150); }
 //   noAnnoInClip … 注釈の外接矩形を切り抜きに含めない
 //   within … 切り抜きをこの対象の範囲に収める（例 '#canvas-wrap'＝サイドバーの端を写さない）
 //   fmt    … 'png'|'jpeg' を明示
+//   wide   … メニューバーが全部入る幅に画面を広げてから撮り、撮った後に戻す（wideToolbar）
 async function shot(name, opts = {}) {
+  const narrow = opts.wide ? await wideToolbar() : null;
   let annoBox = null;
   if (opts.anno && opts.anno.length) annoBox = await page.evaluate((a) => window.__mnl.draw(a), opts.anno);
   await wait(60);
@@ -322,6 +335,15 @@ async function shot(name, opts = {}) {
   await page.evaluate(() => window.__mnl.clear());
   manifest[name] = { file, w: clip ? clip.width : vw, h: clip ? clip.height : vh, dsf: DSF };
   console.log('  ' + file + '  ' + manifest[name].w + '×' + manifest[name].h);
+  if (narrow) await narrow();
+}
+// メニューバー（#toolbar-scroll）が全部入る幅に画面を広げる。戻り値＝元の大きさに戻す関数
+async function wideToolbar() {
+  const w = await ev(() => document.getElementById('toolbar-scroll').scrollWidth);
+  const vw0 = page.viewportSize ? page.viewportSize().width : (page.viewport() || {}).width;
+  const vh0 = page.viewportSize ? page.viewportSize().height : (page.viewport() || {}).height;
+  if (w + 40 > vw0) { await B.setSize(w + 40, vh0); await wait(300); }
+  return async () => { if (w + 40 > vw0) { await B.setSize(vw0, vh0); await wait(300); } };
 }
 
 // ============================================================
@@ -703,6 +725,8 @@ sections.m03 = async () => {
   await ev(() => { document.getElementById('btn-show-toolbar').style.display = 'none'; });
   await B.setSize(VW, VH); await wait(300);
   // 3.2 メニューバー全体（ジャンル番号）。1 枚だと文書で小さくなるので前半（ファイル〜書式）と後半に分ける
+  //   v8.34 からメニューバーが 1600px に収まらない＝ジャンルとボタンの撮影の間だけ画面を広げる
+  const narrow3 = await wideToolbar();
   const groups = await ev(() => [...document.querySelectorAll('#toolbar-scroll > .rgroup')].map((g, i) => ({ i, vis: g.getBoundingClientRect().width > 0, name: g.querySelector('.glabel')?.textContent })));
   const visGroups = groups.filter(g => g.vis);
   const ribAnno = (ks) => ks.map(k => ({ box: { sel: '#toolbar-scroll > .rgroup', i: k }, n: k + 1, at: 'br', inset: true, r: 11, pad: -2, rx: 4, sw: 2 }));
@@ -715,16 +739,24 @@ sections.m03 = async () => {
     ['save', '#toolbar .bigbtn.save'], ['saveas', { sel: '#toolbar .tbtn', text: '名前をつけて保存' }], ['import', { sel: '#toolbar .tbtn', text: 'インポート' }],
     ['text2d', { sel: '#toolbar .tbtn', text: 'テキスト作図' }], ['paste', '#btn-paste'], ['copy', { sel: '#toolbar .tbtn', text: 'コピー' }],
     ['delete', { sel: '#toolbar .tbtn.red', text: '削除' }], ['undo', { sel: '#toolbar .tbtn', text: '元に戻す' }], ['redo', { sel: '#toolbar .tbtn', text: 'やり直す' }],
-    ['select', '#btn-select'], ['connect', '#btn-connect'], ['hand', '#btn-hand'], ['color', { sel: '#toolbar .tbtn', text: '色' , i: 0 }],
-    ['fontsize', '#fontsize-tools'], ['align', { sel: '#toolbar .rrow', text: '文字揃え' }], ['group', '#btn-group'], ['ungroup', '#btn-ungroup'],
+    ['select', '#btn-select'], ['connect', '#btn-connect'], ['hand', '#btn-hand'],
+    // v8.34: 色のボタンは Office と同じ 3 つ（左側＝直前の色・▾＝色の一覧）と、下段の「一括」
+    ['fill', { sel: '#oc-tools .osplit', i: 0 }], ['line', { sel: '#oc-tools .osplit', i: 1 }], ['fontcolor', { sel: '#oc-tools .osplit', i: 2 }],
+    ['style', '#toolbar .osplit.ostyle'],
+    ['fontsize', '#fontsize-tools'], ['align', ['#toolbar button[title="テキストを左揃え"]', { sel: '#toolbar .rlabel', text: '文字揃え' }]],   // v8.34: 同じ行の左に「一括」が並んだので、行全体ではなく左揃えのボタンから「文字揃え」まで ['group', '#btn-group'], ['ungroup', '#btn-ungroup'],
     ['dashed', '#btn-dashed'], ['orient', '#btn-orient'], ['arrange', '#btn-arrange'],
     ['zoom', { sel: '#toolbar .rrow', text: '全体' }], ['search', { sel: '#toolbar .tbtn', text: '検索' }], ['print', { sel: '#toolbar .bigbtn', text: '印刷' }],
     ['png', { sel: '#toolbar .tbtn', text: 'PNG' }],
-    ['pdfscale', { sel: '#toolbar .rrow', text: '倍率' }], ['paper', { sel: '#toolbar .rrow', text: '用紙' }], ['fitpages', { sel: '#toolbar .rrow', text: 'ページ数' }],
+    // v8.34追補: 「用紙」の行の右に「日付を印刷」と文字サイズの欄が入った＝用紙は「用紙」〜向きの選択欄だけを切り抜く
+    //   倍率とページ数の行も、列の幅いっぱいに伸びて右に空白が入る＝「倍率」〜「%」、「ページ数」〜横の欄だけを切り抜く（改ページ位置は別の画像）
+    ['pdfscale', [{ sel: '#toolbar .rlabel', text: '倍率' }, { sel: '#toolbar .rlabel', text: '%' }]], ['paper', [{ sel: '#toolbar .rlabel', text: '用紙' }, '#print-orient']], ['fitpages', [{ sel: '#toolbar .rlabel', text: 'ページ数' }, '#print-fit-wide']],
     ['pagebreak', '#btn-pagebreak'],
+    ['printdate', '#print-band-set label'],
+    ['bandpt', [{ sel: '#print-band-set .rlabel', text: '文字サイズ' }, { sel: '#print-band-set .rlabel', text: 'pt', i: 1 }]],
     ['hidemenu', '#btn-hide-toolbar'],
   ];
   for (const [nm, t] of btns) await shot('btn_' + nm, { clip: t, pad: 2 });
+  await narrow3();
   // メニューバーの横スクロール（狭い画面）
   await B.setSize(1150, 760); await wait(300);
   await ev(() => { try { updateTbArrows(); } catch (e) { } });
@@ -1038,13 +1070,55 @@ sections.m06 = async () => {
     await page.mouse.up(); await page.keyboard.up('Control'); await wait(200);
   }
 
-  // ---- 6.3 色 ----
+  // ---- 6.3 色（v8.34: Office と同じ「図形の塗りつぶし」「図形の枠線」「フォントの色」と、下段の「一括」）----
   await open('flowchart');
   await ev(() => { S.gridOn = false; updateGridBtn(); const n = addNode('rect', 200, 120, { text: '内容を確認' }); S.sel = [n.id]; render(); markSaved(); });
-  await click({ sel: '#toolbar .tbtn', text: '色', i: 0 });
-  await wait(250);
-  await shot('m06_color', { clip: ['#lane-choice', { sel: '#toolbar .tbtn', text: '色', i: 0 }], pad: 8, anno: [{ box: { sel: '#toolbar .tbtn', text: '色', i: 0 }, n: 1, at: 'r', out: true, pad: 2 }] });
-  await page.keyboard.press('Escape'); await ev(() => document.getElementById('lane-choice')?.remove());
+  // 一覧の「最近使用した色」の段を撮影するため、3 色を入れておく（このブラウザに覚えるだけで、図のデータには入らない）
+  await ev(() => { ['#70AD47', '#ED7D31', '#4472C4'].forEach(c => ocPushRecent(c)); });
+  const ocSplit = (i) => ({ sel: '#oc-tools .osplit', i });
+  await shot('m06_color_tools', {
+    clip: ['#oc-tools', '#toolbar .osplit.ostyle'], pad: 6,
+    anno: [
+      { box: ocSplit(0), n: 1, at: 't', out: true, pad: 1, r: 11 },
+      { box: ocSplit(1), n: 2, at: 't', out: true, pad: 1, r: 11 },
+      { box: ocSplit(2), n: 3, at: 't', out: true, pad: 1, r: 11 },
+      { box: '#toolbar .osplit.ostyle', n: 4, at: 'b', out: true, pad: 1, r: 11 },
+    ],
+  });
+  // 「図形の塗りつぶし」の ▾ ＝色の一覧
+  await click({ sel: '#oc-tools .osplit .od', i: 0 }); await wait(250);
+  const ocHd = (t) => ({ sel: '#lane-choice .oc-hd', text: t });
+  const ocIt = (t) => ({ sel: '#lane-choice .oc-item', text: t });
+  await shot('m06_color', {
+    clip: ['#lane-choice', ocSplit(0)], pad: 8,
+    anno: [
+      { box: ocHd('テーマの色'), n: 1, at: 'l', out: true, pad: 2, r: 11 },
+      { box: ocHd('標準の色'), n: 2, at: 'l', out: true, pad: 2, r: 11 },
+      { box: ocHd('最近使用した色'), n: 3, at: 'l', out: true, pad: 2, r: 11 },
+      { box: ocIt('塗りつぶしなし'), n: 4, at: 'l', out: true, pad: 1, r: 11 },
+      { box: ocIt('塗りつぶしの色'), n: 5, at: 'l', out: true, pad: 1, r: 11 },
+      { box: ocIt('グラデーション'), n: 6, at: 'l', out: true, pad: 1, r: 11 },
+    ],
+  });
+  // 「塗りつぶしの色」＝「色の設定」のダイアログ（開いたときはユーザー設定のタブ）
+  await click(ocIt('塗りつぶしの色')); await wait(300);
+  await shot('m06_color_dialog', {
+    clip: '#oc-dlg .ocd-box', pad: 10,
+    anno: [
+      { box: '#oc-dlg .ocd-tabs', n: 1, at: 'r', out: true, pad: 1, r: 11 },
+      { box: [{ sel: '#oc-dlg .ocd-f', i: 0 }, { sel: '#oc-dlg .ocd-f', i: 3 }], n: 2, at: 'l', out: true, pad: 2, r: 11 },
+      { box: { sel: '#oc-dlg .ocd-f', i: 4 }, n: 3, at: 'l', out: true, pad: 2, r: 11 },
+      { box: '#oc-dlg .ocd-newcur', n: 4, at: 'r', out: true, pad: 2, r: 11 },
+      { box: ['#oc-dlg [data-a=ok]', '#oc-dlg [data-a=cancel]'], n: 5, at: 'r', out: true, pad: 2, r: 11 },
+      { box: '#oc-dlg .ocd-alpha', n: 6, at: 'l', out: true, pad: 2, r: 11 },
+    ],
+  });
+  await click('#oc-dlg [data-a=cancel]'); await wait(200);
+  if (await ev(() => !!document.getElementById('oc-dlg'))) throw new Error('「色の設定」の「キャンセル」で閉じません');
+  // 「一括」の ▾
+  await click('#toolbar .osplit.ostyle .od'); await wait(250);
+  await shot('m06_color_style', { clip: ['#lane-choice', '#toolbar .osplit.ostyle'], pad: 8 });
+  await ev(() => ocClose());
 
   // ---- 6.4 整列（レーンを保つ）----
   await open('swimlane'); await lanes3();
@@ -1398,8 +1472,8 @@ sections.org = async () => {
   });
   // 2. ダブルクリックで編集ダイアログ → 役職名と氏名を入力
   await dblclick({ node: '役職名' }); await wait(400);
-  await page.click('#om-title', { clickCount: 3 }); await page.keyboard.type('総務部長');
-  await page.click('.om-cell', { clickCount: 3 }); await page.keyboard.type('山田 太郎');
+  await retype('#om-title', '総務部長');
+  await retype('.om-cell', '山田 太郎');
   await wait(100);
   await shot('m_org_02_edit', {
     clip: '#org-modal-box', pad: 12,
@@ -1627,9 +1701,9 @@ sections.m10g = async () => {
   await shot('m10_gantt_hour', { clip: { c: [cw.x, cw.y, 1060, 250] }, pad: 0 });
   // 工程表ツールのボタン実物
   await ev(() => { ganttSetScale('day'); });
-  await shot('btn_gantt_dates', { clip: { sel: '#gantt-tools .rrow', i: 0 }, pad: 2 });
-  await shot('btn_gantt_wrap', { clip: { sel: '#gantt-tools .rrow', i: 1 }, pad: 2 });
-  await shot('btn_excel_on', { clip: '#btn-excel', pad: 2 });
+  await shot('btn_gantt_dates', { clip: { sel: '#gantt-tools .rrow', i: 0 }, pad: 2, wide: true });
+  await shot('btn_gantt_wrap', { clip: { sel: '#gantt-tools .rrow', i: 1 }, pad: 2, wide: true });
+  await shot('btn_excel_on', { clip: '#btn-excel', pad: 2, wide: true });
 };
 
 // ---------- 第6章 ガントチャート（作例「倉庫の改修工事の工程表」と機能ごとの画面）----------
@@ -1638,7 +1712,7 @@ sections.m10g = async () => {
 sections.gantt = async () => {
   const away = async () => { await page.mouse.move(5, VH - 5); await ev(() => hint('')); };   // ヒント帯が図に重ならないように消す
   const setVal = (sel, v) => ev(([sel, v]) => { const el = document.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }, [sel, v]);
-  const typeIn = async (sel, v) => { await page.click(sel, { clickCount: 3 }); await page.keyboard.type(v); };
+  const typeIn = (sel, v) => retype(sel, v);
   // 工程表の範囲（画面座標）: 図の左上から、最後の行の下＋余白まで。w＝幅（省略時は図の幅）
   const chartBox = (o = {}) => ev((o) => {
     const svg = document.getElementById('diagram-svg').getBoundingClientRect(), cw = document.getElementById('canvas-wrap').getBoundingClientRect();
@@ -1698,18 +1772,27 @@ sections.gantt = async () => {
   });
   // 3. タスク一覧で見本を書き換える（1・2行目の名前を打ち替え）／残りは ✕ で消す
   await ev(() => document.getElementById('gantt-list-sec').scrollIntoView({ block: 'end' }));
-  await typeIn('#gantt-row-list .lr:nth-child(1) .lname', '仮設・養生');
-  await typeIn('#gantt-row-list .lr:nth-child(2) .lname', '資材搬入');
+  // v8.33追補: タスク一覧はフェーズのパネル（.gph）とタスクの行（.lr）を並べたグリッドになった＝:nth-child では行を指せない。
+  //   行は「何番目の .lr か」で選ぶ
+  const rowPart = async (i, part) => (await page.$$('#gantt-row-list .lr ' + part))[i];
+  const retypeRow = async (i, v) => { const h = await rowPart(i, '.lname'); await h.click(); await h.evaluate(el => el.select()); await page.keyboard.type(v); };
+  await retypeRow(0, '仮設・養生');
+  await retypeRow(1, '資材搬入');
   await ev(() => { document.activeElement.blur(); render(); }); await wait(200);
   await shot('m_gantt_03_list', {
     clip: '#gantt-list-sec', pad: 6,
     anno: [
-      { box: '#gantt-row-list .lr:nth-child(1) .lname', n: 1, at: 'l', out: true, pad: 1 },
-      { box: '#gantt-row-list .lr:nth-child(3) .ldel', n: 2, at: 'r', out: true, pad: 1 },
+      { box: { sel: '#gantt-row-list .lr .lname', i: 0 }, n: 1, at: 'l', out: true, pad: 1 },
+      { box: { sel: '#gantt-row-list .lr .ldel', i: 2 }, n: 2, at: 'r', out: true, pad: 1 },
     ],
   });
-  for (let k = 0; k < 4; k++) { await page.click('#gantt-row-list .lr:nth-child(3) .ldel'); await wait(150); await ev(() => { document.activeElement.blur(); render(); }); await wait(150); }
-  await ev(() => { document.getElementById('sidebar').scrollTop = 0; });
+  for (let k = 0; k < 4; k++) { await (await rowPart(2, '.ldel')).click(); await wait(150); await ev(() => { document.activeElement.blur(); render(); }); await wait(150); }
+  // タスク一覧を scrollIntoView で見せたときに、ページ全体も上へずれる（v8.33追補でタスク一覧が高くなった）＝ページのスクロールも戻す。
+  //   戻さないとパレットの「タスク」がメニューバーの下に隠れ、次のドラッグがメニューバーから始まって置けない
+  //   scrollIntoView はスクロールバーの無い（overflow:hidden の）祖先の要素もずらすので、タスク一覧の祖先をすべて戻す
+  await ev(() => { for (let el = document.getElementById('gantt-list-sec'); el; el = el.parentElement) { el.scrollTop = 0; el.scrollLeft = 0; } window.scrollTo(0, 0); });
+  await wait(200);
+  if (await ev(() => document.getElementById('ps-gantt_task').getBoundingClientRect().top < document.getElementById('toolbar').getBoundingClientRect().bottom)) throw new Error('パレットの「タスク」がメニューバーに隠れています');
   // 残った2つに日程を入れ、フェーズを外す（手順 5・6 で作り直す）
   await putTasks(T.slice(0, 2).map(t => Object.assign({}, t, { phase: null })));
   await ev(() => { S.nodes = S.nodes.filter(n => n.type !== 'gantt_summary'); ganttSyncAllTaskColors(); ganttSetHoliday('jp', true); S.gantt.colWidth = 22; S.sel = []; snap(); render(); markSaved(); });
@@ -1764,7 +1847,9 @@ sections.gantt = async () => {
   // フェーズをダブルクリック → 名前と色
   await dblclick(await spine('フェーズ')); await wait(400);
   await typeIn('#gm-name', '準備工事');
-  await click({ sel: '#gm-colors .gm-swatch', i: 0 });
+  // v8.34: 色は見本の並びから、色のボタン（.oc-cbtn）で開く色の一覧になった＝一覧の「これまでの色」の最初の色を選ぶ
+  await click('#gm-colors .oc-cbtn'); await wait(250);
+  await click({ sel: '#lane-choice .oc-style', i: 0 }); await wait(200);
   await shot('m_gantt_06_phase', {
     clip: '#gantt-modal-box', pad: 8,
     anno: [{ box: '#gm-name', n: 1, at: 'l', out: true, pad: 2 }, { box: '#gm-colors', n: 2, at: 'l', out: true, pad: 2 }],
@@ -1821,7 +1906,7 @@ sections.gantt = async () => {
   await ev(() => { const el = document.querySelector('#ghm-body .ghm-sub'); el.scrollIntoView({ block: 'start' }); }); await wait(150);
   await shot('m_gantt_legend', {
     clip: [{ sel: '#ghm-body .ghm-inline', i: 1 }, { sel: '#ghm-body .ghm-add', i: 1 }], pad: 8,
-    anno: [{ box: { sel: '#ghm-body .ghm-color', i: 0 }, n: 1, at: 'l', out: true, pad: 2 }, { box: { sel: '#ghm-body .ghm-add', i: 1 }, n: 2, at: 'r', out: true, pad: 2 }],
+    anno: [{ box: { sel: '#ghm-body .ghm-lgc', i: 0 }, n: 1, at: 'l', out: true, pad: 2 }, { box: { sel: '#ghm-body .ghm-add', i: 1 }, n: 2, at: 'r', out: true, pad: 2 }],   // v8.33: 凡例の色は色見本のボタン（.ghm-lgc）
   });
   await ev(() => closeGanttHeadEditor(false)); await wait(200);
   // 6.13 目盛り（週・月）
@@ -2140,11 +2225,15 @@ sections.m11 = async () => {
     anno: [
       { box: { sel: '#toolbar .bigbtn', text: '印刷' }, n: 1, at: 'b', out: true, pad: 1, r: 11 },
       { box: { sel: '#toolbar .tbtn', text: 'PNG' }, n: 2, at: 't', out: true, pad: 1, r: 11 },
-      { box: { sel: '#toolbar .rrow', text: '倍率' }, n: 3, at: 't', out: true, pad: 1, r: 11 },
-      { box: { sel: '#toolbar .rrow', text: '用紙' }, n: 4, at: 'r', out: true, pad: 1, r: 11 },
+      // 倍率の行は右端まで伸びるので、枠は「倍率」〜「%」だけ（④⑦の番号を同じ行の空いた所に置くため）
+      { box: [{ sel: '#toolbar .rlabel', text: '倍率' }, { sel: '#toolbar .rlabel', text: '%' }], n: 3, at: 't', out: true, pad: 1, r: 11 },
+      { box: [{ sel: '#toolbar .rlabel', text: '用紙' }, '#print-orient'], n: 4, at: 'tr', out: true, pad: 1, r: 11 },
       { box: [{ sel: '#print-fit-tall' }, { sel: '#print-fit-wide' }], n: 5, at: 'b', out: true, pad: 2, r: 11 },
       { box: '#btn-pagebreak', n: 6, at: 'b', out: true, pad: 1, r: 11 },
+      // v8.34追補: 「用紙」の行の右の「日付を印刷」と、タイトル欄の文字サイズ
+      { box: '#print-band-set', n: 7, at: 't', out: true, pad: 1, r: 11 },
     ],
+    wide: true,
   });
   // 改ページ位置の表示（ページ数 縦 2）
   await ev(() => {
@@ -2171,7 +2260,7 @@ sections.m11 = async () => {
     const c = await d2c(0, pb[0]);
     await shot('m11_pagebreak', { clip: { c: [c[0], c[1] - 200, 700, 330] }, pad: 0, within: '#canvas-wrap', anno: [{ badge: 1, at: [c[0] + 640, c[1] - 16] }] });
   }
-  await shot('m11_fit_readout', { clip: { sel: '#toolbar .rrow', text: '倍率' }, pad: 4, anno: [{ box: '#pdf-scale-eff', pad: 2, sw: 2 }] });
+  await shot('m11_fit_readout', { clip: { sel: '#toolbar .rrow', text: '倍率' }, pad: 4, anno: [{ box: '#pdf-scale-eff', pad: 2, sw: 2 }], wide: true });
   // 書き出し（凡例つき）の見た目
   await open('swimlane'); await sampleApproval();
   await ev(() => {
